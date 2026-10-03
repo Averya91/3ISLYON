@@ -1,0 +1,17 @@
+{
+  "name": "3is-lyon-rentman-store",
+  "version": "1.2.0",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "netlify dev"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^5.1.0",
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "netlify-cli": "^23.9.0"
+  }
+}
