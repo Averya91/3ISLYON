@@ -4,7 +4,7 @@ require('dotenv').config();
 // Cloudflare bindings are available through cloudflare:workers on Workers.
 // Node local development continues to use .env.
 let workerEnv = null;
-try { workerEnv = require('cloudflare:workers').env; } catch (_) {}
+function setWorkerEnv(env) { workerEnv = env; }
 const config = key => workerEnv?.[key] || process.env[key];
 
 const app = express();
@@ -571,3 +571,4 @@ if (require.main === module) {
 }
 
 module.exports = app;
+module.exports.setWorkerEnv = setWorkerEnv;
