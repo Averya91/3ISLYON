@@ -1,5 +1,4 @@
 const express = require('express');
-const path = require('path');
 require('dotenv').config();
 // Cloudflare bindings are available through cloudflare:workers on Workers.
 // Node local development continues to use .env.
@@ -13,8 +12,8 @@ const baseUrl = () => (config('RENTMAN_BASE_URL') || 'https://api.rentman.net').
 const token = () => config('RENTMAN_TOKEN');
 
 app.use(express.json({ limit: '1mb' }));
-// Cloudflare serves public/ as free static assets; retain Express static files locally.
-if (!workerEnv) app.use(express.static(path.join(__dirname, '..', 'public')));
+// Static assets are served by Cloudflare Assets in production.
+// Local Wrangler development serves the same public/ directory from wrangler.jsonc.
 
 // Rentman is the source of truth. We cache relatively static inventory data longer
 // than date-dependent availability data so the UI feels instant without hammering the API.
