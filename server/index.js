@@ -14,7 +14,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // than date-dependent availability data so the UI feels instant without hammering the API.
 const cache = new Map();
 const INVENTORY_CACHE_MS = 60_000;
-const AVAILABILITY_CACHE_MS = 15_000;
+const AVAILABILITY_CACHE_MS = 60_000;
 const IMAGE_CACHE_MS = 10 * 60_000;
 
 function cacheGet(key, maxAge) {
@@ -23,7 +23,7 @@ function cacheGet(key, maxAge) {
 }
 function cacheSet(key, data) { cache.set(key, { at: Date.now(), data }); return data; }
 
-const RENTMAN_REQUEST_TIMEOUT_MS = 6500;
+const RENTMAN_REQUEST_TIMEOUT_MS = 4500;
 const RENTMAN_MAX_RETRIES = 1;
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
@@ -109,9 +109,9 @@ async function all(pathname, params = {}, options = {}) {
   let data = Array.isArray(first.data) ? first.data : [];
   let next = first.next_page_url;
   let guard = 0;
-  const paginationDeadline = Date.now() + 18_000;
+  const paginationDeadline = Date.now() + 12_000;
 
-  while (next && guard++ < 30) {
+  while (next && guard++ < 12) {
     if (Date.now() >= paginationDeadline) {
       const err = new Error('Rentman: lecture trop volumineuse, réessaie dans quelques secondes.');
       err.status = 504;
