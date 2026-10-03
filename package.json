@@ -4,14 +4,15 @@
   "private": true,
   "scripts": {
     "start": "node server/index.js",
-    "dev": "netlify dev"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "dev:node": "node server/index.js"
   },
   "dependencies": {
     "dotenv": "^16.4.7",
-    "express": "^5.1.0",
-    "serverless-http": "^3.2.0"
+    "express": "^5.1.0"
   },
   "devDependencies": {
-    "netlify-cli": "^23.9.0"
+    "wrangler": "^4.0.0"
   }
 }

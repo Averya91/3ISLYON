@@ -1,0 +1,19 @@
+{
+  "name": "catalogue-3is-lyon",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-03",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/health"
+    ]
+  },
+  "vars": {
+    "RENTMAN_BASE_URL": "https://api.rentman.net"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
