@@ -1,14 +1,20 @@
 const express = require('express');
 const path = require('path');
 require('dotenv').config();
+// Cloudflare bindings are available through cloudflare:workers on Workers.
+// Node local development continues to use .env.
+let workerEnv = null;
+try { workerEnv = require('cloudflare:workers').env; } catch (_) {}
+const config = key => workerEnv?.[key] || process.env[key];
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BASE = (process.env.RENTMAN_BASE_URL || 'https://api.rentman.net').replace(/\/$/, '');
-const TOKEN = process.env.RENTMAN_TOKEN;
+const baseUrl = () => (config('RENTMAN_BASE_URL') || 'https://api.rentman.net').replace(/\/$/, '');
+const token = () => config('RENTMAN_TOKEN');
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, '..', 'public')));
+// Cloudflare serves public/ as free static assets; retain Express static files locally.
+if (!workerEnv) app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Rentman is the source of truth. We cache relatively static inventory data longer
 // than date-dependent availability data so the UI feels instant without hammering the API.
@@ -37,7 +43,7 @@ async function fetchRentman(url, { maxRetries = RENTMAN_MAX_RETRIES } = {}) {
     let text = '';
     try {
       r = await fetch(url, {
-        headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json' },
+        headers: { Authorization: `Bearer ${token()}`, Accept: 'application/json' },
         signal: controller.signal
       });
       text = await r.text();
@@ -80,8 +86,8 @@ async function fetchRentman(url, { maxRetries = RENTMAN_MAX_RETRIES } = {}) {
 }
 
 async function rentman(pathname, params = {}, { cacheMs = 0 } = {}) {
-  if (!TOKEN) throw new Error('RENTMAN_TOKEN manquant dans .env');
-  const url = new URL(BASE + pathname);
+  if (!token()) throw new Error('RENTMAN_TOKEN manquant dans .env');
+  const url = new URL(baseUrl() + pathname);
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
   });
@@ -117,7 +123,9 @@ async function all(pathname, params = {}, options = {}) {
       err.status = 504;
       throw err;
     }
-    const j = await fetchRentman(new URL(next, BASE).toString(), { maxRetries: 0 });
+    const pageUrl = new URL(next, baseUrl());
+    if (pageUrl.origin !== new URL(baseUrl()).origin) throw Object.assign(new Error('URL de pagination Rentman invalide'), { status: 502 });
+    const j = await fetchRentman(pageUrl.toString(), { maxRetries: 0 });
     data = data.concat(Array.isArray(j.data) ? j.data : []);
     next = j.next_page_url;
   }
@@ -215,7 +223,7 @@ function normalizeEquipment(e, folderMap = new Map()) {
     location,
     folder: folderName,
     archived: Boolean(e.archive || e.archived || e.in_archive),
-    raw: e
+    // Never expose Rentman's complete equipment record to public browsers.
   };
 }
 
@@ -254,7 +262,7 @@ function overlap(a, b, from, to) {
   return a < to && b > from;
 }
 
-app.get(['/api/health', '/health'], (req, res) => res.json({ ok: true, rentmanConfigured: Boolean(TOKEN) }));
+app.get(['/api/health', '/health'], (req, res) => res.json({ ok: true, rentmanConfigured: Boolean(token()) }));
 
 app.get(['/api/equipment', '/equipment'], async (req, res) => {
   try {
@@ -379,13 +387,13 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
 
 
 async function writeRentman(pathname, method, body) {
-  if (!TOKEN) throw new Error('RENTMAN_TOKEN manquant dans .env');
+  if (!token()) throw new Error('RENTMAN_TOKEN manquant dans .env');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RENTMAN_REQUEST_TIMEOUT_MS);
   try {
-    const r = await fetch(BASE + pathname, {
+    const r = await fetch(baseUrl() + pathname, {
       method,
-      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/json', 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${token()}`, Accept: 'application/json', 'Content-Type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal
     });
