@@ -102,20 +102,31 @@ async function all(pathname, params = {}, options = {}) {
     if (cached) return cached;
   }
 
-  // Rentman raised the collection limit to 1500 in API v1.8.0.
-  // Using the maximum limit drastically reduces pagination and therefore rate-limit pressure.
-  const first = await rentman(pathname, { ...params, limit: params.limit || 1500 }, { cacheMs });
+  // Rentman's next_page_url is cursor-based and is returned when cursor_limit
+  // is used. Using `limit` here can fall back to offset pagination and force a
+  // serverless invocation to walk a large history page-by-page.
+  const first = await rentman(pathname, { ...params, cursor_limit: params.cursor_limit || 1500 }, { cacheMs });
   let data = Array.isArray(first.data) ? first.data : [];
   let next = first.next_page_url;
   let guard = 0;
+  const paginationDeadline = Date.now() + 18_000;
 
-  while (next && guard++ < 100) {
-    const j = await fetchRentman(new URL(next, BASE).toString());
+  while (next && guard++ < 30) {
+    if (Date.now() >= paginationDeadline) {
+      const err = new Error('Rentman: lecture trop volumineuse, réessaie dans quelques secondes.');
+      err.status = 504;
+      throw err;
+    }
+    const j = await fetchRentman(new URL(next, BASE).toString(), { maxRetries: 0 });
     data = data.concat(Array.isArray(j.data) ? j.data : []);
     next = j.next_page_url;
   }
 
-  if (next) throw new Error(`Rentman pagination interrompue après ${guard} pages`);
+  if (next) {
+    const err = new Error(`Rentman pagination interrompue après ${guard} pages`);
+    err.status = 504;
+    throw err;
+  }
   return cacheMs ? cacheSet(collectionKey, data) : data;
 }
 
