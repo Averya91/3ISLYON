@@ -31,6 +31,26 @@ function cacheSet(key, data) { cache.set(key, { at: Date.now(), data }); return 
 
 const RENTMAN_REQUEST_TIMEOUT_MS = 4500;
 const RENTMAN_MAX_RETRIES = 1;
+const RESERVATION_ACCESS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function b64url(input) { return Buffer.from(input).toString('base64url'); }
+function b64urlJson(obj) { return b64url(JSON.stringify(obj)); }
+async function hmac(data) {
+  const secret = config('RESERVATION_ACCESS_SECRET');
+  if (!secret) throw Object.assign(new Error('RESERVATION_ACCESS_SECRET manquant'), { status: 503 });
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return b64url(Buffer.from(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(data))));
+}
+async function issueReservationAccess(id, email) {
+  const payload = b64urlJson({ id: Number(id), email: lower(email), exp: Date.now() + RESERVATION_ACCESS_TTL_MS });
+  return `${payload}.${await hmac(payload)}`;
+}
+async function verifyReservationAccess(token, id, email) {
+  if (!token || !id || !safeEmail(email)) return false;
+  const [payload, signature] = String(token).split('.');
+  if (!payload || !signature || signature !== await hmac(payload)) return false;
+  try { const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); return data.id === Number(id) && data.email === lower(email) && data.exp > Date.now(); } catch (_) { return false; }
+}
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -501,7 +521,8 @@ app.post('/api/reservations', async (req, res) => {
       });
       if (i < lines.length - 1) await sleep(180);
     }
-    res.json({ ok: true, reservation: { id: pr.id, email, status: 'Demande envoyée à Rentman' } });
+    const accessToken = await issueReservationAccess(pr.id, email);
+    res.json({ ok: true, reservation: { id: pr.id, email, accessToken, status: 'Demande envoyée à Rentman' } });
   } catch (e) { res.status(e.status || 502).json({ error: e.message, retryable: e.status === 429 || e.status === 504 }); }
 });
 
@@ -509,6 +530,7 @@ app.post('/api/reservations/:id/view', async (req, res) => {
   try {
     const id = Number(req.params.id); const email = lower(req.body?.email);
     if (!id || !safeEmail(email)) return res.status(400).json({ error: 'Référence ou e-mail invalide.' });
+    if (!await verifyReservationAccess(req.body?.accessToken, id, email)) return res.status(403).json({ error: 'Lien de suivi invalide ou expiré.' });
     const got = await rentman(`/projectrequests/${id}`);
     const pr = projectRequestData(got);
     if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Réservation introuvable avec cet e-mail.' });
@@ -522,6 +544,7 @@ app.post('/api/reservations/:id/message', async (req, res) => {
   try {
     const id = Number(req.params.id); const email = lower(req.body?.email); const message = String(req.body?.message || '').trim();
     if (!id || !safeEmail(email) || !message) return res.status(400).json({ error: 'Message invalide.' });
+    if (!await verifyReservationAccess(req.body?.accessToken, id, email)) return res.status(403).json({ error: 'Lien de suivi invalide ou expiré.' });
     if (message.length > 1000) return res.status(400).json({ error: 'Message trop long (1000 caractères maximum).' });
     const got = await rentman(`/projectrequests/${id}`); const pr = projectRequestData(got);
     if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
