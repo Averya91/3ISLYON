@@ -110,13 +110,15 @@ async function all(pathname, params = {}, options = {}) {
   // Rentman API v1.8+ uses `limit` on the initial collection request
   // (max 1500). The API returns an opaque cursor in `next_page_url`; we follow
   // that URL verbatim and never construct the cursor ourselves.
-  const first = await rentman(pathname, { ...params, limit: params.limit || 1500 }, { cacheMs });
+  // Use Rentman's current cursor pagination. It is substantially faster for
+  // large collections and next_page_url carries cursor_after for us.
+  const first = await rentman(pathname, { ...params, cursor_limit: params.cursor_limit || 1500 }, { cacheMs });
   let data = Array.isArray(first.data) ? first.data : [];
   let next = first.next_page_url;
   let guard = 0;
-  const paginationDeadline = Date.now() + 12_000;
+  const paginationDeadline = Date.now() + 25_000;
 
-  while (next && guard++ < 12) {
+  while (next && guard++ < 50) {
     if (Date.now() >= paginationDeadline) {
       const err = new Error('Rentman: lecture trop volumineuse, réessaie dans quelques secondes.');
       err.status = 504;
