@@ -102,10 +102,10 @@ async function all(pathname, params = {}, options = {}) {
     if (cached) return cached;
   }
 
-  // Rentman's next_page_url is cursor-based and is returned when cursor_limit
-  // is used. Using `limit` here can fall back to offset pagination and force a
-  // serverless invocation to walk a large history page-by-page.
-  const first = await rentman(pathname, { ...params, cursor_limit: params.cursor_limit || 1500 }, { cacheMs });
+  // Rentman API v1.8+ uses `limit` on the initial collection request
+  // (max 1500). The API returns an opaque cursor in `next_page_url`; we follow
+  // that URL verbatim and never construct the cursor ourselves.
+  const first = await rentman(pathname, { ...params, limit: params.limit || 1500 }, { cacheMs });
   let data = Array.isArray(first.data) ? first.data : [];
   let next = first.next_page_url;
   let guard = 0;
