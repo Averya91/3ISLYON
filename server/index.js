@@ -522,88 +522,148 @@ app.get('/api/people', async (req, res) => {
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
-// Creates a native Rentman Project Request, then attaches each requested equipment line.
-// This is the supported Rentman workflow for incoming requests from a website/CRM.
+// V16.5 — local request workflow for Lyon Standard.
+// Pending requests live in Cloudflare D1, so the website no longer depends on
+// Rentman's Project Requests feature (which is unavailable on the Lyon plan).
+function requestsDb() { return workerEnv?.REQUESTS_DB || null; }
+function requireRequestsDb() {
+  const db = requestsDb();
+  if (!db) { const e = new Error('Base des demandes non configurée.'); e.status = 503; throw e; }
+  return db;
+}
+function magasinAuthorized(req) {
+  const expected = String(config('RESERVATION_ACCESS_SECRET') || '');
+  const supplied = String(req.get('x-magasin-secret') || '');
+  return Boolean(expected) && supplied.length === expected.length && supplied === expected;
+}
+function requireMagasin(req, res, next) {
+  if (!magasinAuthorized(req)) return res.status(401).json({ error: 'Accès magasin refusé.' });
+  next();
+}
+function reservationFromRow(row, messages = []) {
+  return {
+    id: row.id, name: row.name, role: row.role, status: row.status,
+    from: row.date_from, to: row.date_to, reason: row.reason,
+    track: row.track || '', year: row.year || '', course: row.course || '',
+    personalUse: Boolean(row.personal_use),
+    person: [row.first_name, row.last_name].filter(Boolean).join(' '),
+    firstName: row.first_name, lastName: row.last_name, email: row.email,
+    createdAt: row.created_at, updatedAt: row.updated_at,
+    messages
+  };
+}
+async function loadLocalReservation(id) {
+  const db = requireRequestsDb();
+  const row = await db.prepare('SELECT * FROM reservations WHERE id = ?').bind(id).first();
+  if (!row) return null;
+  const equipment = await db.prepare('SELECT equipment_id AS equipmentId, name, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY id').bind(id).all();
+  const messages = await db.prepare('SELECT id, author, message, created_at AS createdAt FROM reservation_messages WHERE reservation_id = ? ORDER BY id').bind(id).all();
+  return { reservation: reservationFromRow(row, messages.results || []), equipment: equipment.results || [] };
+}
+
 app.post('/api/reservations', async (req, res) => {
   try {
     const b = req.body || {};
     if (!['student','teacher'].includes(b.role)) return res.status(400).json({ error: 'Profil invalide' });
-    if (!b.person?.firstName || !b.person?.lastName) return res.status(400).json({ error: 'Sélectionne ton identité dans la liste.' });
-    if (!safeEmail(b.email || b.person.email)) return res.status(400).json({ error: 'Une adresse e-mail valide est obligatoire pour suivre la demande.' });
+    if (!b.person?.firstName || !b.person?.lastName) return res.status(400).json({ error: 'Renseigne ton prénom et ton nom.' });
+    const email = String(b.email || b.person.email || '').trim();
+    if (!safeEmail(email)) return res.status(400).json({ error: 'Une adresse e-mail valide est obligatoire pour suivre la demande.' });
     if (!b.from || !b.to || b.to < b.from) return res.status(400).json({ error: 'Dates invalides' });
     if (!String(b.reason || '').trim()) return res.status(400).json({ error: "Le motif d'utilisation est obligatoire." });
     if (b.role === 'teacher' && (!String(b.track || '').trim() || !String(b.course || '').trim())) return res.status(400).json({ error: 'Filière et nom du cours obligatoires pour un intervenant.' });
     const lines = Array.isArray(b.items) ? b.items.filter(x => Number(x.quantity) > 0 && Number(x.id)) : [];
     if (!lines.length) return res.status(400).json({ error: 'La demande ne contient aucun matériel.' });
 
-    const email = String(b.email || b.person.email).trim();
+    const db = requireRequestsDb();
+    const now = new Date().toISOString();
     const roleLabel = b.role === 'teacher' ? 'Intervenant' : 'Étudiant';
-    const meta = [
-      `DEMANDE WEB 3iS LYON`,
-      `Profil : ${roleLabel}`,
-      b.track ? `Filière : ${b.track}` : '',
-      b.year ? `Année : ${b.year}` : '',
-      b.person?.source === 'manual' ? `Identité : saisie manuelle` : '',
-      b.course ? `Cours : ${b.course}` : '',
-      `Motif : ${String(b.reason).trim()}`,
-      b.personalUse ? `Utilisation personnelle : OUI — chèque de caution obligatoire` : `Utilisation personnelle : NON`,
-      '',
-      `[RÉSERVANT ${new Date().toLocaleString('fr-FR')}] Demande envoyée depuis le catalogue.`
-    ].filter(Boolean).join('\n');
+    const name = `[WEB] ${roleLabel} — ${String(b.course || b.reason).trim()}`.slice(0, 180);
+    const inserted = await db.prepare(`INSERT INTO reservations
+      (status, role, first_name, last_name, email, track, year, course, date_from, date_to, reason, personal_use, person_source, name, created_at, updated_at)
+      VALUES ('pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      .bind(b.role, String(b.person.firstName).trim(), String(b.person.lastName).trim(), email,
+        String(b.track || '').trim(), String(b.year || '').trim(), String(b.course || '').trim(),
+        b.from, b.to, String(b.reason).trim(), b.personalUse ? 1 : 0, String(b.person.source || 'manual'),
+        name, now, now).run();
+    const id = Number(inserted.meta?.last_row_id);
+    if (!id) throw new Error("Impossible de créer la demande.");
 
-    const created = await writeRentman('/projectrequests', 'POST', {
-      name: `[WEB] ${roleLabel} — ${b.course || b.reason}`.slice(0, 180),
-      contact_person_first_name: b.person.firstName,
-      contact_person_lastname: b.person.lastName,
-      contact_person_email: email,
-      ...(b.person?.source === 'contactperson' && b.person?.rentmanRef ? { linked_contact_person: b.person.rentmanRef } : {}),
-      planperiod_start: dateTimeStart(b.from),
-      planperiod_end: dateTimeEnd(b.to),
-      usageperiod_start: dateTimeStart(b.from),
-      usageperiod_end: dateTimeEnd(b.to),
-      language: 'fr',
-      is_paid: false,
-      remark: meta
-    });
-    const pr = projectRequestData(created);
-    if (!pr.id) throw new Error("Rentman n'a pas renvoyé l'identifiant de la demande.");
+    const statements = lines.map(x => db.prepare(
+      'INSERT INTO reservation_items (reservation_id, equipment_id, name, quantity) VALUES (?, ?, ?, ?)'
+    ).bind(id, Number(x.id), String(x.name || `Équipement ${x.id}`), Number(x.quantity)));
+    statements.push(db.prepare(
+      'INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)'
+    ).bind(id, 'user', 'Demande envoyée depuis le catalogue.', now));
+    await db.batch(statements);
 
-    // Keep write concurrency deliberately low to avoid Rentman's rate limiter.
-    for (let i = 0; i < lines.length; i++) {
-      const x = lines[i];
-      await writeRentman(`/projectrequests/${pr.id}/projectrequestequipment`, 'POST', {
-        quantity: Number(x.quantity), quantity_total: Number(x.quantity), is_comment: false, is_kit: false,
-        linked_equipment: `/equipment/${Number(x.id)}`, name: String(x.name || `Équipement ${x.id}`),
-        external_remark: String(x.note || ''), discount: 0, unit_price: 0, factor: '1', order: String(i + 1)
-      });
-      if (i < lines.length - 1) await sleep(180);
-    }
-    res.json({ ok: true, reservation: { id: pr.id, email, status: 'Demande envoyée à Rentman' } });
-  } catch (e) { res.status(e.status || 502).json({ error: e.message, retryable: e.status === 429 || e.status === 504 }); }
+    res.json({ ok: true, reservation: { id, email, status: 'pending' } });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
 app.post('/api/reservations/:id/view', async (req, res) => {
   try {
-    const id = Number(req.params.id); const email = lower(req.body?.email);
+    const id = Number(req.params.id), email = lower(req.body?.email);
     if (!id || !safeEmail(email)) return res.status(400).json({ error: 'Référence ou e-mail invalide.' });
-    const got = await rentman(`/projectrequests/${id}`);
-    const pr = projectRequestData(got);
-    if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Réservation introuvable avec cet e-mail.' });
-    let equipment = [];
-    try { equipment = await all(`/projectrequests/${id}/projectrequestequipment`, {}, { cacheMs: 5000 }); } catch (_) {}
-    res.json({ reservation: publicRequest(pr), equipment: equipment.map(x => ({ id:x.id, name:x.name, quantity:x.quantity_total ?? x.quantity ?? 1 })) });
+    const data = await loadLocalReservation(id);
+    if (!data || lower(data.reservation.email) !== email) return res.status(404).json({ error: 'Réservation introuvable avec cet e-mail.' });
+    res.json(data);
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
 app.post('/api/reservations/:id/message', async (req, res) => {
   try {
-    const id = Number(req.params.id); const email = lower(req.body?.email); const message = String(req.body?.message || '').trim();
+    const id = Number(req.params.id), email = lower(req.body?.email), message = String(req.body?.message || '').trim();
     if (!id || !safeEmail(email) || !message) return res.status(400).json({ error: 'Message invalide.' });
     if (message.length > 1000) return res.status(400).json({ error: 'Message trop long (1000 caractères maximum).' });
-    const got = await rentman(`/projectrequests/${id}`); const pr = projectRequestData(got);
-    if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
-    const remark = `${pr.remark || ''}\n\n[RÉSERVANT ${new Date().toLocaleString('fr-FR')}] ${message}`.trim();
-    await writeRentman(`/projectrequests/${id}`, 'PUT', { planperiod_start: pr.planperiod_start, planperiod_end: pr.planperiod_end, remark });
+    const data = await loadLocalReservation(id);
+    if (!data || lower(data.reservation.email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
+    await requireRequestsDb().prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
+      .bind(id, 'user', message, new Date().toISOString()).run();
+    res.json({ ok: true });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
+app.get('/api/magasin/requests', requireMagasin, async (req, res) => {
+  try {
+    const status = String(req.query.status || 'all');
+    const db = requireRequestsDb();
+    const q = status === 'all'
+      ? db.prepare('SELECT * FROM reservations ORDER BY id DESC LIMIT 200')
+      : db.prepare('SELECT * FROM reservations WHERE status = ? ORDER BY id DESC LIMIT 200').bind(status);
+    const rows = await q.all();
+    res.json({ items: (rows.results || []).map(row => reservationFromRow(row)) });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+app.get('/api/magasin/requests/:id', requireMagasin, async (req, res) => {
+  try {
+    const data = await loadLocalReservation(Number(req.params.id));
+    if (!data) return res.status(404).json({ error: 'Demande introuvable.' });
+    res.json(data);
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+app.post('/api/magasin/requests/:id/status', requireMagasin, async (req, res) => {
+  try {
+    const id = Number(req.params.id), status = String(req.body?.status || '');
+    if (!['pending','accepted','refused'].includes(status)) return res.status(400).json({ error: 'Statut invalide.' });
+    const db = requireRequestsDb(), now = new Date().toISOString();
+    const result = await db.prepare('UPDATE reservations SET status = ?, updated_at = ? WHERE id = ?').bind(status, now, id).run();
+    if (!result.meta?.changes) return res.status(404).json({ error: 'Demande introuvable.' });
+    const labels = { pending:'remise en attente', accepted:'acceptée par le magasin', refused:'refusée par le magasin' };
+    await db.prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
+      .bind(id, 'staff', `Demande ${labels[status]}.`, now).run();
+    res.json({ ok: true, status });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+app.post('/api/magasin/requests/:id/message', requireMagasin, async (req, res) => {
+  try {
+    const id = Number(req.params.id), message = String(req.body?.message || '').trim();
+    if (!id || !message) return res.status(400).json({ error: 'Message invalide.' });
+    if (message.length > 1000) return res.status(400).json({ error: 'Message trop long (1000 caractères maximum).' });
+    const db = requireRequestsDb();
+    const exists = await db.prepare('SELECT id FROM reservations WHERE id = ?').bind(id).first();
+    if (!exists) return res.status(404).json({ error: 'Demande introuvable.' });
+    await db.prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
+      .bind(id, 'staff', message, new Date().toISOString()).run();
     res.json({ ok: true });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
