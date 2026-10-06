@@ -15,5 +15,12 @@
   },
   "observability": {
     "enabled": true
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "REQUESTS_DB",
+      "database_name": "3islyon-requests",
+      "database_id": "5964f3b7-6cc3-40af-92ce-d74c8e0d2206"
+    }
+  ]
 }
