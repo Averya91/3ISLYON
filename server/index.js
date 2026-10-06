@@ -304,14 +304,23 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
       const gs = new Date(g.planperiod_start || g.usageperiod_start || '');
       const ge = new Date(g.planperiod_end || g.usageperiod_end || '');
       return !Number.isNaN(gs.valueOf()) && !Number.isNaN(ge.valueOf()) && overlap(gs, ge, from, to);
-    });
+    }).sort((a, b) => Number(a.id) - Number(b.id));
 
-    // Keep concurrency bounded: this avoids hammering Rentman while still being
-    // much faster than reading the entire projectequipment history.
+    // Cloudflare Workers Free allows only 50 external subrequests per invocation.
+    // Process at most 18 relevant groups per browser request. The frontend follows
+    // nextOffset and combines the deductions, so large periods remain exact while
+    // every Worker invocation stays comfortably below Cloudflare's hard limit.
+    const requestedOffset = Math.max(0, Number.parseInt(req.query.groupOffset || '0', 10) || 0);
+    const groupsPerInvocation = 18;
+    const selectedGroups = relevantGroups.slice(requestedOffset, requestedOffset + groupsPerInvocation);
+    const nextOffset = requestedOffset + selectedGroups.length < relevantGroups.length
+      ? requestedOffset + selectedGroups.length
+      : null;
+
     const planned = [];
     const batchSize = 6;
-    for (let i = 0; i < relevantGroups.length; i += batchSize) {
-      const batch = relevantGroups.slice(i, i + batchSize);
+    for (let i = 0; i < selectedGroups.length; i += batchSize) {
+      const batch = selectedGroups.slice(i, i + batchSize);
       const rows = await Promise.all(batch.map(async group => {
         const lines = await all(`/projectequipmentgroup/${group.id}/projectequipment`, {
           sort: '+id',
@@ -410,7 +419,13 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
         knownCount: items.filter(x => x.stockKnown).length,
         unknownCount: items.filter(x => !x.stockKnown).length
       },
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      pagination: {
+        groupOffset: requestedOffset,
+        processedGroups: selectedGroups.length,
+        totalGroups: relevantGroups.length,
+        nextOffset
+      }
     };
     cacheSet(cacheKey, payload);
     res.json(payload);
