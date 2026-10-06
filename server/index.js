@@ -18,8 +18,8 @@ app.use(express.json({ limit: '1mb' }));
 // Rentman is the source of truth. We cache relatively static inventory data longer
 // than date-dependent availability data so the UI feels instant without hammering the API.
 const cache = new Map();
-const INVENTORY_CACHE_MS = 60_000;
-const AVAILABILITY_CACHE_MS = 60_000;
+const INVENTORY_CACHE_MS = 5 * 60_000;
+const AVAILABILITY_CACHE_MS = 2 * 60_000;
 const IMAGE_CACHE_MS = 10 * 60_000;
 
 function cacheGet(key, maxAge) {
@@ -311,14 +311,14 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
     // nextOffset and combines the deductions, so large periods remain exact while
     // every Worker invocation stays comfortably below Cloudflare's hard limit.
     const requestedOffset = Math.max(0, Number.parseInt(req.query.groupOffset || '0', 10) || 0);
-    const groupsPerInvocation = 18;
+    const groupsPerInvocation = 32;
     const selectedGroups = relevantGroups.slice(requestedOffset, requestedOffset + groupsPerInvocation);
     const nextOffset = requestedOffset + selectedGroups.length < relevantGroups.length
       ? requestedOffset + selectedGroups.length
       : null;
 
     const planned = [];
-    const batchSize = 6;
+    const batchSize = 12;
     for (let i = 0; i < selectedGroups.length; i += batchSize) {
       const batch = selectedGroups.slice(i, i + batchSize);
       const rows = await Promise.all(batch.map(async group => {
