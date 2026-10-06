@@ -480,23 +480,91 @@ function publicRequest(pr) {
   };
 }
 
-// Lightweight people lookup. It intentionally returns only names and references needed by the form.
-// Filtering is also performed server-side so the browser never receives the whole Rentman address book.
+// People lookup used by the checkout. Rentman can store a student/intervenant
+// either as a contact person (attached to a contact) or as a private contact.
+// Search both collections so a person visible in Rentman is also selectable here.
+function normalizePersonText(v) {
+  return lower(v).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function personMatches(person, q) {
+  const needle = normalizePersonText(q);
+  const words = needle.split(/\s+/).filter(Boolean);
+  const haystack = normalizePersonText([
+    person.firstName, person.lastName, person.name, person.email
+  ].filter(Boolean).join(' '));
+  return words.every(word => haystack.includes(word));
+}
+
 app.get('/api/people', async (req, res) => {
   try {
-    const q = lower(req.query.q);
+    const q = String(req.query.q || '').trim();
     if (q.length < 2) return res.json({ items: [] });
-    const people = await all('/contactpersons', { sort: '+id', fields: 'id,firstname,first_name,lastname,last_name,middle_name,email,custom,contact' }, { cacheMs: 60_000 });
-    const found = people.map(p => ({
-      id: p.id,
-      firstName: pick(p, ['firstname','first_name'], ''),
-      lastName: pick(p, ['lastname','last_name'], ''),
-      email: p.email || '',
-      custom: p.custom || {},
-      contact: p.contact || ''
-    })).filter(p => lower(`${p.firstName} ${p.lastName}`).includes(q)).slice(0, 12);
+
+    const [contactPersonsResult, contactsResult] = await Promise.allSettled([
+      all('/contactpersons', {
+        sort: '+id',
+        fields: 'id,firstname,first_name,lastname,last_name,middle_name,email,custom,contact'
+      }, { cacheMs: 5 * 60_000 }),
+      all('/contacts', {
+        sort: '+id',
+        fields: 'id,type,firstname,surname,name,email_1,email_2,default_person'
+      }, { cacheMs: 5 * 60_000 })
+    ]);
+
+    const people = [];
+
+    if (contactPersonsResult.status === 'fulfilled') {
+      for (const p of contactPersonsResult.value) {
+        people.push({
+          id: p.id,
+          rentmanRef: `/contactpersons/${p.id}`,
+          source: 'contactperson',
+          firstName: pick(p, ['firstname','first_name'], ''),
+          lastName: pick(p, ['lastname','last_name'], ''),
+          name: '',
+          email: p.email || '',
+          custom: p.custom || {},
+          contact: p.contact || ''
+        });
+      }
+    }
+
+    if (contactsResult.status === 'fulfilled') {
+      for (const p of contactsResult.value) {
+        // Private contacts are actual people in Rentman and may not have a
+        // separate /contactpersons row.
+        if (p.type && p.type !== 'private') continue;
+        const firstName = pick(p, ['firstname'], '');
+        const lastName = pick(p, ['surname'], '');
+        people.push({
+          id: p.id,
+          rentmanRef: `/contacts/${p.id}`,
+          source: 'contact',
+          firstName,
+          lastName,
+          name: p.name || [firstName, lastName].filter(Boolean).join(' '),
+          email: p.email_1 || p.email_2 || '',
+          custom: {},
+          contact: `/contacts/${p.id}`
+        });
+      }
+    }
+
+    const seen = new Set();
+    const found = people
+      .filter(p => personMatches(p, q))
+      .filter(p => {
+        const key = normalizePersonText(`${p.firstName}|${p.lastName}|${p.email}`);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 20);
+
     res.json({ items: found });
-  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+  } catch (e) {
+    res.status(e.status || 502).json({ error: e.message });
+  }
 });
 
 // Creates a native Rentman Project Request, then attaches each requested equipment line.
@@ -531,6 +599,9 @@ app.post('/api/reservations', async (req, res) => {
       contact_person_first_name: b.person.firstName,
       contact_person_lastname: b.person.lastName,
       contact_person_email: email,
+      ...(b.person?.source === 'contactperson' && b.person?.rentmanRef
+        ? { linked_contact_person: b.person.rentmanRef }
+        : {}),
       planperiod_start: dateTimeStart(b.from),
       planperiod_end: dateTimeEnd(b.to),
       usageperiod_start: dateTimeStart(b.from),
