@@ -486,7 +486,8 @@ function normalizePersonText(value) {
 }
 function matchesPerson(person, query) {
   const words = normalizePersonText(query).split(/\s+/).filter(Boolean);
-  const haystack = normalizePersonText([person.firstName, person.lastName, person.email].filter(Boolean).join(' '));
+  // The checkout field is a name search: an email containing the typed first name must not create a false match.
+  const haystack = normalizePersonText([person.firstName, person.lastName].filter(Boolean).join(' '));
   return words.every(word => haystack.includes(word));
 }
 app.get('/api/people', async (req, res) => {
