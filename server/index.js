@@ -542,6 +542,8 @@ app.post('/api/reservations', async (req, res) => {
       `DEMANDE WEB 3iS LYON`,
       `Profil : ${roleLabel}`,
       b.track ? `Filière : ${b.track}` : '',
+      b.year ? `Année : ${b.year}` : '',
+      b.person?.source === 'manual' ? `Identité : saisie manuelle` : '',
       b.course ? `Cours : ${b.course}` : '',
       `Motif : ${String(b.reason).trim()}`,
       b.personalUse ? `Utilisation personnelle : OUI — chèque de caution obligatoire` : `Utilisation personnelle : NON`,
