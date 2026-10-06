@@ -284,15 +284,53 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
     const cached = cacheGet(cacheKey, AVAILABILITY_CACHE_MS);
     if (cached) return res.json(cached);
 
-    // Inventory and planning are independent: fetch them concurrently so a cold
-    // Netlify invocation does not spend its whole execution window waiting serially.
-    const [equipment, planned] = await Promise.all([
+    // Do NOT scan the global /projectequipment collection: on large Rentman
+    // accounts that requires dozens of paginated requests and exceeds the
+    // Cloudflare Worker subrequest budget.
+    //
+    // Rentman currently exposes the planning period on equipment groups as
+    // well as individual equipment lines. First fetch the much smaller group
+    // collection, keep only groups overlapping the requested dates, then fetch
+    // equipment only for those groups through the documented child endpoint.
+    const [equipment, groups] = await Promise.all([
       getEquipment(),
-      all('/projectequipment', {
+      all('/projectequipmentgroup', {
         sort: '+id',
-        fields: 'id,equipment,linked_equipment,parent,quantity,quantity_total,is_option,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end,warehouse_reservations,subrent_reservations'
+        fields: 'id,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end'
       }, { cacheMs: AVAILABILITY_CACHE_MS })
     ]);
+
+    const relevantGroups = groups.filter(g => {
+      const gs = new Date(g.planperiod_start || g.usageperiod_start || '');
+      const ge = new Date(g.planperiod_end || g.usageperiod_end || '');
+      return !Number.isNaN(gs.valueOf()) && !Number.isNaN(ge.valueOf()) && overlap(gs, ge, from, to);
+    });
+
+    // Keep concurrency bounded: this avoids hammering Rentman while still being
+    // much faster than reading the entire projectequipment history.
+    const planned = [];
+    const batchSize = 6;
+    for (let i = 0; i < relevantGroups.length; i += batchSize) {
+      const batch = relevantGroups.slice(i, i + batchSize);
+      const rows = await Promise.all(batch.map(async group => {
+        const lines = await all(`/projectequipmentgroup/${group.id}/projectequipment`, {
+          sort: '+id',
+          fields: 'id,equipment,linked_equipment,parent,quantity,quantity_total,is_option,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end,warehouse_reservations,subrent_reservations'
+        }, { cacheMs: AVAILABILITY_CACHE_MS });
+        // During Rentman's transition, child lines may not yet carry their own
+        // planning fields. Fall back to the group's period without changing the
+        // stock calculation.
+        return lines.map(line => ({
+          ...line,
+          parent: line.parent || group.id,
+          planperiod_start: line.planperiod_start || group.planperiod_start,
+          planperiod_end: line.planperiod_end || group.planperiod_end,
+          usageperiod_start: line.usageperiod_start || group.usageperiod_start,
+          usageperiod_end: line.usageperiod_end || group.usageperiod_end
+        }));
+      }));
+      planned.push(...rows.flat());
+    }
 
     const byId = new Map(equipment.map(e => [Number(e.id), e]));
     const deductions = new Map();
