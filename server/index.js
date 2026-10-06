@@ -480,21 +480,43 @@ function publicRequest(pr) {
   };
 }
 
-// Lightweight people lookup. It intentionally returns only names and references needed by the form.
-// Filtering is also performed server-side so the browser never receives the whole Rentman address book.
+// Checkout lookup: Rentman people can exist as contact persons or private contacts.
+function normalizePersonText(value) {
+  return lower(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+function matchesPerson(person, query) {
+  const words = normalizePersonText(query).split(/\s+/).filter(Boolean);
+  const haystack = normalizePersonText([person.firstName, person.lastName, person.email].filter(Boolean).join(' '));
+  return words.every(word => haystack.includes(word));
+}
 app.get('/api/people', async (req, res) => {
   try {
-    const q = lower(req.query.q);
+    const q = String(req.query.q || '').trim();
     if (q.length < 2) return res.json({ items: [] });
-    const people = await all('/contactpersons', { sort: '+id', fields: 'id,firstname,first_name,lastname,last_name,middle_name,email,custom,contact' }, { cacheMs: 60_000 });
-    const found = people.map(p => ({
-      id: p.id,
-      firstName: pick(p, ['firstname','first_name'], ''),
-      lastName: pick(p, ['lastname','last_name'], ''),
-      email: p.email || '',
-      custom: p.custom || {},
-      contact: p.contact || ''
-    })).filter(p => lower(`${p.firstName} ${p.lastName}`).includes(q)).slice(0, 12);
+    const results = await Promise.allSettled([
+      all('/contactpersons', { sort: '+id', fields: 'id,firstname,first_name,lastname,last_name,email,custom,contact' }, { cacheMs: 300_000 }),
+      all('/contacts', { sort: '+id', fields: 'id,type,firstname,surname,name,email_1,email_2' }, { cacheMs: 300_000 })
+    ]);
+    const people = [];
+    if (results[0].status === 'fulfilled') for (const p of results[0].value) people.push({
+      id: p.id, source: 'contactperson', rentmanRef: '/contactpersons/' + p.id,
+      firstName: pick(p, ['firstname','first_name'], ''), lastName: pick(p, ['lastname','last_name'], ''),
+      email: p.email || '', custom: p.custom || {}, contact: p.contact || ''
+    });
+    if (results[1].status === 'fulfilled') for (const p of results[1].value) {
+      if (p.type && p.type !== 'private') continue;
+      people.push({
+        id: p.id, source: 'contact', rentmanRef: '/contacts/' + p.id,
+        firstName: p.firstname || '', lastName: p.surname || '',
+        email: p.email_1 || p.email_2 || '', custom: {}, contact: '/contacts/' + p.id
+      });
+    }
+    const seen = new Set();
+    const found = people.filter(p => matchesPerson(p, q)).filter(p => {
+      const key = normalizePersonText([p.firstName,p.lastName,p.email].join('|'));
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    }).slice(0, 20);
     res.json({ items: found });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
@@ -531,6 +553,7 @@ app.post('/api/reservations', async (req, res) => {
       contact_person_first_name: b.person.firstName,
       contact_person_lastname: b.person.lastName,
       contact_person_email: email,
+      ...(b.person?.source === 'contactperson' && b.person?.rentmanRef ? { linked_contact_person: b.person.rentmanRef } : {}),
       planperiod_start: dateTimeStart(b.from),
       planperiod_end: dateTimeEnd(b.to),
       usageperiod_start: dateTimeStart(b.from),
