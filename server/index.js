@@ -263,6 +263,30 @@ function overlap(a, b, from, to) {
 
 app.get(['/api/health', '/health'], (req, res) => res.json({ ok: true, rentmanConfigured: Boolean(token()) }));
 
+// Temporary protected diagnostic: inspect the raw Rentman fields of one equipment item
+// without exposing the Rentman token. Uses the same magasin secret as /magasin.html.
+app.get('/api/magasin/diagnostic/equipment/:id', requireMagasin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Équipement invalide.' });
+    const raw = await rentman(`/equipment/${id}`, {}, { cacheMs: 0 });
+    const item = raw?.data || raw;
+    if (!item || typeof item !== 'object') return res.status(404).json({ error: 'Équipement introuvable.' });
+
+    const entries = Object.entries(item)
+      .filter(([key]) => !/token|secret|authorization|password/i.test(key))
+      .sort(([a], [b]) => a.localeCompare(b, 'fr'));
+
+    res.json({
+      id,
+      keys: entries.map(([key]) => key),
+      fields: Object.fromEntries(entries)
+    });
+  } catch (e) {
+    res.status(e.status || 502).json({ error: e.message });
+  }
+});
+
 app.get(['/api/equipment', '/equipment'], async (req, res) => {
   try {
     const items = await getEquipment();
