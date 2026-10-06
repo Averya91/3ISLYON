@@ -11,3 +11,44 @@ Cette branche préserve l'API Express et sert `public/` comme assets Cloudflare.
 **Limites importantes :** Workers Free a un quota quotidien et un plafond de sous-requêtes par invocation. `/api/availability` parcourt encore tout `/projectequipment`, donc cette migration ne garantit pas de résoudre les limites Rentman. Les parcours de réservation et les accès personnels doivent être vérifiés avant production. Le couple numéro de demande + e-mail actuel ne constitue pas une authentification forte : ajouter une vérification e-mail avant une ouverture publique.
 
 Développement : `npm install`, `npm run dev`. Express local : `npm run dev:node` avec `.env` non versionné. Ne jamais committer de secrets.
+
+
+## V16.5 — demandes locales (sans Rentman Pro)
+
+Lyon peut gérer les demandes sans l'option Rentman « Demandes de location ». Les demandes, messages et décisions du magasin sont stockés dans Cloudflare D1.
+
+### 1. Créer la base D1 (une seule fois)
+
+```bash
+npx wrangler d1 create 3islyon-requests
+```
+
+Wrangler affiche un `database_id`. Ajoute ensuite ce binding dans `wrangler.jsonc` avec l'identifiant retourné :
+
+```jsonc
+"d1_databases": [
+  {
+    "binding": "REQUESTS_DB",
+    "database_name": "3islyon-requests",
+    "database_id": "COLLER_ICI_LE_DATABASE_ID"
+  }
+]
+```
+
+### 2. Créer les tables
+
+```bash
+npx wrangler d1 execute 3islyon-requests --remote --file=./schema.sql
+```
+
+### 3. Accès magasin
+
+Le secret Cloudflare `RESERVATION_ACCESS_SECRET` déjà configuré sert de code d'accès à `/magasin.html`. Ne jamais le mettre dans le dépôt ni dans le JavaScript public.
+
+### 4. Déployer
+
+```bash
+npx wrangler deploy
+```
+
+Flux V16.5 : catalogue → demande locale D1 → espace magasin → accepter/refuser + messagerie. L'acceptation ne crée pas encore automatiquement un projet Rentman : cette étape sera raccordée séparément à `POST /projects` après validation du flux et des champs BETA de l'API Rentman.
