@@ -220,6 +220,7 @@ function normalizeEquipment(e, folderMap = new Map()) {
     incomingStock: Math.max(0, number(pick(e, ['in_quantity'], 0))),
     location,
     folder: folderName,
+    rentalPrice: Math.max(0, number(pick(e, ['rental_price'], 0))),
     archived: Boolean(e.archive || e.archived || e.in_archive),
     // Never expose Rentman's complete equipment record to public browsers.
   };
@@ -247,7 +248,7 @@ async function getEquipment() {
     'id','name','displayname','description','external_remark','internal_remark',
     'folder','image','in_archive','location_in_warehouse','type',
     'current','current_quantity','current_quantity_excl_cases','in_quantity',
-    'quantity_in_cases','stock_management','is_physical','rental_sales'
+    'quantity_in_cases','stock_management','is_physical','rental_sales','rental_price'
   ].join(',');
   const [raw, folderMap] = await Promise.all([
     all('/equipment', { sort: '+id', fields }, { cacheMs: INVENTORY_CACHE_MS }),
