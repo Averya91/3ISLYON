@@ -220,7 +220,7 @@ function normalizeEquipment(e, folderMap = new Map()) {
     incomingStock: Math.max(0, number(pick(e, ['in_quantity'], 0))),
     location,
     folder: folderName,
-    rentalPrice: Math.max(0, number(pick(e, ['rental_price'], 0))),
+    rentalPrice: Math.max(0, number(pick(e, ['price'], 0))),
     archived: Boolean(e.archive || e.archived || e.in_archive),
     // Never expose Rentman's complete equipment record to public browsers.
   };
@@ -248,7 +248,7 @@ async function getEquipment() {
     'id','name','displayname','description','external_remark','internal_remark',
     'folder','image','in_archive','location_in_warehouse','type',
     'current','current_quantity','current_quantity_excl_cases','in_quantity',
-    'quantity_in_cases','stock_management','is_physical','rental_sales','rental_price'
+    'quantity_in_cases','stock_management','is_physical','rental_sales','price','factor_group'
   ].join(',');
   const [raw, folderMap] = await Promise.all([
     all('/equipment', { sort: '+id', fields }, { cacheMs: INVENTORY_CACHE_MS }),
@@ -262,30 +262,6 @@ function overlap(a, b, from, to) {
 }
 
 app.get(['/api/health', '/health'], (req, res) => res.json({ ok: true, rentmanConfigured: Boolean(token()) }));
-
-// Temporary protected diagnostic: inspect the raw Rentman fields of one equipment item
-// without exposing the Rentman token. Uses the same magasin secret as /magasin.html.
-app.get('/api/magasin/diagnostic/equipment/:id', requireMagasin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    if (!id) return res.status(400).json({ error: 'Équipement invalide.' });
-    const raw = await rentman(`/equipment/${id}`, {}, { cacheMs: 0 });
-    const item = raw?.data || raw;
-    if (!item || typeof item !== 'object') return res.status(404).json({ error: 'Équipement introuvable.' });
-
-    const entries = Object.entries(item)
-      .filter(([key]) => !/token|secret|authorization|password/i.test(key))
-      .sort(([a], [b]) => a.localeCompare(b, 'fr'));
-
-    res.json({
-      id,
-      keys: entries.map(([key]) => key),
-      fields: Object.fromEntries(entries)
-    });
-  } catch (e) {
-    res.status(e.status || 502).json({ error: e.message });
-  }
-});
 
 app.get(['/api/equipment', '/equipment'], async (req, res) => {
   try {
