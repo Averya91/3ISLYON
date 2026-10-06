@@ -522,90 +522,161 @@ app.get('/api/people', async (req, res) => {
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
-// Creates a native Rentman Project Request, then attaches each requested equipment line.
-// This is the supported Rentman workflow for incoming requests from a website/CRM.
+// V17 — Requests are stored by the catalogue itself so Lyon can keep Rentman Standard.
+// In production, bind a Cloudflare KV namespace as REQUESTS_KV. Local Node development
+// falls back to memory only so developers can test without a Cloudflare account.
+const localRequests = new Map();
+function requestsKv() { return workerEnv?.REQUESTS_KV || null; }
+function requestKey(id) { return `reservation:${String(id).toUpperCase()}`; }
+function newRequestId() {
+  const time = Date.now().toString(36).slice(-7);
+  const rand = Math.random().toString(36).slice(2, 6);
+  return (time + rand).toUpperCase();
+}
+async function saveRequest(request) {
+  const kv = requestsKv();
+  const value = JSON.stringify(request);
+  if (kv?.put) await kv.put(requestKey(request.id), value);
+  else if (!workerEnv) localRequests.set(requestKey(request.id), value);
+  else throw Object.assign(new Error('Stockage des demandes non configuré (REQUESTS_KV).'), { status: 503 });
+  return request;
+}
+async function getRequest(id) {
+  const kv = requestsKv();
+  let value;
+  if (kv?.get) value = await kv.get(requestKey(id));
+  else if (!workerEnv) value = localRequests.get(requestKey(id));
+  else throw Object.assign(new Error('Stockage des demandes non configuré (REQUESTS_KV).'), { status: 503 });
+  if (!value) return null;
+  return typeof value === 'string' ? JSON.parse(value) : value;
+}
+async function listRequests() {
+  const kv = requestsKv();
+  if (kv?.list) {
+    let cursor, rows = [];
+    do {
+      const page = await kv.list({ prefix: 'reservation:', cursor });
+      const values = await Promise.all(page.keys.map(k => kv.get(k.name)));
+      rows.push(...values.filter(Boolean).map(v => typeof v === 'string' ? JSON.parse(v) : v));
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    return rows;
+  }
+  if (!workerEnv) return [...localRequests.values()].map(JSON.parse);
+  throw Object.assign(new Error('Stockage des demandes non configuré (REQUESTS_KV).'), { status: 503 });
+}
+function publicLocalRequest(r) {
+  return {
+    id:r.id, name:r.name, from:r.from, to:r.to, status:r.status,
+    person:`${r.person.firstName} ${r.person.lastName}`.trim(),
+    email:r.email, role:r.role, track:r.track || '', year:r.year || '',
+    course:r.course || '', reason:r.reason || '', personalUse:Boolean(r.personalUse),
+    items:r.items || [], messages:r.messages || [], createdAt:r.createdAt, updatedAt:r.updatedAt
+  };
+}
+function adminAuthorized(req) {
+  const expected = String(config('RESERVATION_ACCESS_SECRET') || '');
+  const supplied = String(req.headers['x-magasin-secret'] || '');
+  return expected && supplied && supplied.length === expected.length && supplied === expected;
+}
+function requireAdmin(req, res) {
+  if (adminAuthorized(req)) return true;
+  res.status(401).json({ error:'Accès magasin refusé.' });
+  return false;
+}
+
 app.post('/api/reservations', async (req, res) => {
   try {
     const b = req.body || {};
-    if (!['student','teacher'].includes(b.role)) return res.status(400).json({ error: 'Profil invalide' });
-    if (!b.person?.firstName || !b.person?.lastName) return res.status(400).json({ error: 'Sélectionne ton identité dans la liste.' });
-    if (!safeEmail(b.email || b.person.email)) return res.status(400).json({ error: 'Une adresse e-mail valide est obligatoire pour suivre la demande.' });
-    if (!b.from || !b.to || b.to < b.from) return res.status(400).json({ error: 'Dates invalides' });
-    if (!String(b.reason || '').trim()) return res.status(400).json({ error: "Le motif d'utilisation est obligatoire." });
-    if (b.role === 'teacher' && (!String(b.track || '').trim() || !String(b.course || '').trim())) return res.status(400).json({ error: 'Filière et nom du cours obligatoires pour un intervenant.' });
-    const lines = Array.isArray(b.items) ? b.items.filter(x => Number(x.quantity) > 0 && Number(x.id)) : [];
-    if (!lines.length) return res.status(400).json({ error: 'La demande ne contient aucun matériel.' });
+    if (!['student','teacher'].includes(b.role)) return res.status(400).json({ error:'Profil invalide' });
+    if (!b.person?.firstName || !b.person?.lastName) return res.status(400).json({ error:'Renseigne ton prénom et ton nom.' });
+    const email = String(b.email || b.person.email || '').trim();
+    if (!safeEmail(email)) return res.status(400).json({ error:'Une adresse e-mail valide est obligatoire pour suivre la demande.' });
+    if (!b.from || !b.to || b.to < b.from) return res.status(400).json({ error:'Dates invalides' });
+    if (!String(b.reason || '').trim()) return res.status(400).json({ error:"Le motif d'utilisation est obligatoire." });
+    if (b.role === 'teacher' && (!String(b.track || '').trim() || !String(b.course || '').trim())) return res.status(400).json({ error:'Filière et nom du cours obligatoires pour un intervenant.' });
+    const lines = Array.isArray(b.items) ? b.items.filter(x => Number(x.quantity) > 0 && Number(x.id)).map(x => ({
+      id:Number(x.id), name:String(x.name || `Équipement ${x.id}`), quantity:Math.max(1, Number(x.quantity) || 1)
+    })) : [];
+    if (!lines.length) return res.status(400).json({ error:'La demande ne contient aucun matériel.' });
 
-    const email = String(b.email || b.person.email).trim();
+    const now = new Date().toISOString();
     const roleLabel = b.role === 'teacher' ? 'Intervenant' : 'Étudiant';
-    const meta = [
-      `DEMANDE WEB 3iS LYON`,
-      `Profil : ${roleLabel}`,
-      b.track ? `Filière : ${b.track}` : '',
-      b.year ? `Année : ${b.year}` : '',
-      b.person?.source === 'manual' ? `Identité : saisie manuelle` : '',
-      b.course ? `Cours : ${b.course}` : '',
-      `Motif : ${String(b.reason).trim()}`,
-      b.personalUse ? `Utilisation personnelle : OUI — chèque de caution obligatoire` : `Utilisation personnelle : NON`,
-      '',
-      `[RÉSERVANT ${new Date().toLocaleString('fr-FR')}] Demande envoyée depuis le catalogue.`
-    ].filter(Boolean).join('\n');
-
-    const created = await writeRentman('/projectrequests', 'POST', {
-      name: `[WEB] ${roleLabel} — ${b.course || b.reason}`.slice(0, 180),
-      contact_person_first_name: b.person.firstName,
-      contact_person_lastname: b.person.lastName,
-      contact_person_email: email,
-      ...(b.person?.source === 'contactperson' && b.person?.rentmanRef ? { linked_contact_person: b.person.rentmanRef } : {}),
-      planperiod_start: dateTimeStart(b.from),
-      planperiod_end: dateTimeEnd(b.to),
-      usageperiod_start: dateTimeStart(b.from),
-      usageperiod_end: dateTimeEnd(b.to),
-      language: 'fr',
-      is_paid: false,
-      remark: meta
-    });
-    const pr = projectRequestData(created);
-    if (!pr.id) throw new Error("Rentman n'a pas renvoyé l'identifiant de la demande.");
-
-    // Keep write concurrency deliberately low to avoid Rentman's rate limiter.
-    for (let i = 0; i < lines.length; i++) {
-      const x = lines[i];
-      await writeRentman(`/projectrequests/${pr.id}/projectrequestequipment`, 'POST', {
-        quantity: Number(x.quantity), quantity_total: Number(x.quantity), is_comment: false, is_kit: false,
-        linked_equipment: `/equipment/${Number(x.id)}`, name: String(x.name || `Équipement ${x.id}`),
-        external_remark: String(x.note || ''), discount: 0, unit_price: 0, factor: '1', order: String(i + 1)
-      });
-      if (i < lines.length - 1) await sleep(180);
-    }
-    res.json({ ok: true, reservation: { id: pr.id, email, status: 'Demande envoyée à Rentman' } });
-  } catch (e) { res.status(e.status || 502).json({ error: e.message, retryable: e.status === 429 || e.status === 504 }); }
+    const request = {
+      id:newRequestId(), status:'pending', role:b.role,
+      name:`${roleLabel} — ${b.course || b.reason}`.slice(0,180),
+      person:{ firstName:String(b.person.firstName).trim(), lastName:String(b.person.lastName).trim(), source:b.person.source || 'manual' },
+      email, track:String(b.track || ''), year:String(b.year || ''), course:String(b.course || ''),
+      from:b.from, to:b.to, reason:String(b.reason).trim(), personalUse:Boolean(b.personalUse),
+      items:lines,
+      messages:[{ author:'user', text:'Demande envoyée depuis le catalogue.', at:now }],
+      createdAt:now, updatedAt:now
+    };
+    await saveRequest(request);
+    res.json({ ok:true, reservation:{ id:request.id, email, status:request.status } });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
 });
 
 app.post('/api/reservations/:id/view', async (req, res) => {
   try {
-    const id = Number(req.params.id); const email = lower(req.body?.email);
-    if (!id || !safeEmail(email)) return res.status(400).json({ error: 'Référence ou e-mail invalide.' });
-    const got = await rentman(`/projectrequests/${id}`);
-    const pr = projectRequestData(got);
-    if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Réservation introuvable avec cet e-mail.' });
-    let equipment = [];
-    try { equipment = await all(`/projectrequests/${id}/projectrequestequipment`, {}, { cacheMs: 5000 }); } catch (_) {}
-    res.json({ reservation: publicRequest(pr), equipment: equipment.map(x => ({ id:x.id, name:x.name, quantity:x.quantity_total ?? x.quantity ?? 1 })) });
-  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+    const id = String(req.params.id || '').trim().toUpperCase();
+    const email = lower(req.body?.email);
+    if (!id || !safeEmail(email)) return res.status(400).json({ error:'Référence ou e-mail invalide.' });
+    const request = await getRequest(id);
+    if (!request || lower(request.email) !== email) return res.status(404).json({ error:'Réservation introuvable avec cet e-mail.' });
+    res.json({ reservation:publicLocalRequest(request), equipment:request.items || [] });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
 });
 
 app.post('/api/reservations/:id/message', async (req, res) => {
   try {
-    const id = Number(req.params.id); const email = lower(req.body?.email); const message = String(req.body?.message || '').trim();
-    if (!id || !safeEmail(email) || !message) return res.status(400).json({ error: 'Message invalide.' });
-    if (message.length > 1000) return res.status(400).json({ error: 'Message trop long (1000 caractères maximum).' });
-    const got = await rentman(`/projectrequests/${id}`); const pr = projectRequestData(got);
-    if (lower(pr.contact_person_email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
-    const remark = `${pr.remark || ''}\n\n[RÉSERVANT ${new Date().toLocaleString('fr-FR')}] ${message}`.trim();
-    await writeRentman(`/projectrequests/${id}`, 'PUT', { planperiod_start: pr.planperiod_start, planperiod_end: pr.planperiod_end, remark });
-    res.json({ ok: true });
-  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+    const id = String(req.params.id || '').trim().toUpperCase();
+    const email = lower(req.body?.email), message = String(req.body?.message || '').trim();
+    if (!id || !safeEmail(email) || !message) return res.status(400).json({ error:'Message invalide.' });
+    if (message.length > 1000) return res.status(400).json({ error:'Message trop long (1000 caractères maximum).' });
+    const request = await getRequest(id);
+    if (!request || lower(request.email) !== email) return res.status(403).json({ error:'Accès refusé.' });
+    request.messages = [...(request.messages || []), { author:'user', text:message, at:new Date().toISOString() }];
+    request.updatedAt = new Date().toISOString();
+    await saveRequest(request);
+    res.json({ ok:true });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
+});
+
+app.get('/api/magasin/requests', async (req, res) => {
+  try {
+    if (!requireAdmin(req,res)) return;
+    const rows = await listRequests();
+    rows.sort((a,b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    res.json({ items:rows.map(publicLocalRequest) });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
+});
+app.post('/api/magasin/requests/:id/status', async (req, res) => {
+  try {
+    if (!requireAdmin(req,res)) return;
+    const status = String(req.body?.status || '');
+    if (!['pending','accepted','refused'].includes(status)) return res.status(400).json({ error:'Statut invalide.' });
+    const request = await getRequest(req.params.id);
+    if (!request) return res.status(404).json({ error:'Demande introuvable.' });
+    request.status = status; request.updatedAt = new Date().toISOString();
+    const label = status === 'accepted' ? 'Demande acceptée par le magasin.' : status === 'refused' ? 'Demande refusée par le magasin.' : 'Demande remise en attente.';
+    request.messages = [...(request.messages || []), { author:'staff', text:label, at:request.updatedAt }];
+    await saveRequest(request);
+    res.json({ ok:true, reservation:publicLocalRequest(request) });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
+});
+app.post('/api/magasin/requests/:id/message', async (req, res) => {
+  try {
+    if (!requireAdmin(req,res)) return;
+    const message = String(req.body?.message || '').trim();
+    if (!message || message.length > 1000) return res.status(400).json({ error:'Message invalide.' });
+    const request = await getRequest(req.params.id);
+    if (!request) return res.status(404).json({ error:'Demande introuvable.' });
+    request.messages = [...(request.messages || []), { author:'staff', text:message, at:new Date().toISOString() }];
+    request.updatedAt = new Date().toISOString();
+    await saveRequest(request);
+    res.json({ ok:true });
+  } catch (e) { res.status(e.status || 502).json({ error:e.message }); }
 });
 
 // Resolve Rentman's equipment image lazily. The browser only asks for images
