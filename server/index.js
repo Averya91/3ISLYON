@@ -623,6 +623,50 @@ app.post('/api/reservations/:id/message', async (req, res) => {
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
 
+// Ephemeral typing indicators. These are intentionally short-lived and do not persist personal data.
+const typingState = new Map();
+function typingKey(id, side) { return `${id}:${side}`; }
+function setTyping(id, side, active) {
+  const key = typingKey(id, side);
+  if (active) typingState.set(key, Date.now() + 4500);
+  else typingState.delete(key);
+}
+function isTyping(id, side) {
+  const key = typingKey(id, side), until = typingState.get(key) || 0;
+  if (until <= Date.now()) { typingState.delete(key); return false; }
+  return true;
+}
+app.post('/api/reservations/:id/typing', async (req, res) => {
+  try {
+    const id = Number(req.params.id), email = lower(req.body?.email), active = Boolean(req.body?.active);
+    if (!id || !safeEmail(email)) return res.status(400).json({ error: 'Accès invalide.' });
+    const data = await loadLocalReservation(id);
+    if (!data || lower(data.reservation.email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
+    setTyping(id, 'user', active);
+    res.json({ ok: true, otherTyping: isTyping(id, 'staff') });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+app.post('/api/reservations/:id/presence', async (req, res) => {
+  try {
+    const id = Number(req.params.id), email = lower(req.body?.email);
+    if (!id || !safeEmail(email)) return res.status(400).json({ error: 'Accès invalide.' });
+    const data = await loadLocalReservation(id);
+    if (!data || lower(data.reservation.email) !== email) return res.status(403).json({ error: 'Accès refusé.' });
+    res.json({ otherTyping: isTyping(id, 'staff') });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+app.post('/api/magasin/requests/:id/typing', requireMagasin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Demande invalide.' });
+  setTyping(id, 'staff', Boolean(req.body?.active));
+  res.json({ ok: true, otherTyping: isTyping(id, 'user') });
+});
+app.get('/api/magasin/requests/:id/presence', requireMagasin, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!id) return res.status(400).json({ error: 'Demande invalide.' });
+  res.json({ otherTyping: isTyping(id, 'user') });
+});
+
 app.get('/api/magasin/requests', requireMagasin, async (req, res) => {
   try {
     const status = String(req.query.status || 'all');
