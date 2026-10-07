@@ -816,7 +816,9 @@ async function checkReservationStock(id) {
     try { return await all(`/projectequipmentgroup/${g.id}/projectequipment`,{sort:'+id',fields:'id,equipment,linked_equipment,quantity,is_option,warehouse_reservations'},{cacheMs:AVAILABILITY_CACHE_MS}); } catch (_) { return []; }
   }));
   for (const p of rows.flat()) { if(p.is_option===true)continue;const eid=refId(p.equipment||p.linked_equipment),q=Math.max(0,number(p.warehouse_reservations,0));if(eid&&q)deductions.set(eid,(deductions.get(eid)||0)+q); }
-  const items = data.equipment.map(line=>{const e=byId.get(Number(line.equipmentId)),available=e?.stockKnown?Math.max(0,e.currentStock-(deductions.get(Number(line.equipmentId))||0)):null;return {equipmentId:line.equipmentId,name:line.name,requested:Number(line.quantity),available,ok:available===null||available>=Number(line.quantity)}});
+  const db=requireRequestsDb(), altRows=await db.prepare('SELECT equipment_id AS equipmentId,alternative_equipment_id AS alternativeId FROM equipment_alternatives').all(),altMap=new Map();
+  for(const a of altRows.results||[]){if(!altMap.has(Number(a.equipmentId)))altMap.set(Number(a.equipmentId),[]);const ae=byId.get(Number(a.alternativeId));if(ae)altMap.get(Number(a.equipmentId)).push({id:ae.id,name:ae.name,available:ae.stockKnown?Math.max(0,ae.currentStock-(deductions.get(Number(ae.id))||0)):null})}
+  const items = data.equipment.map(line=>{const e=byId.get(Number(line.equipmentId)),available=e?.stockKnown?Math.max(0,e.currentStock-(deductions.get(Number(line.equipmentId))||0)):null;return {equipmentId:line.equipmentId,name:line.name,requested:Number(line.quantity),available,ok:available===null||available>=Number(line.quantity),alternatives:altMap.get(Number(line.equipmentId))||[]}});
   return { ok:items.every(x=>x.ok), complete:relevant.length<=20, items };
 }
 
