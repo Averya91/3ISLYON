@@ -281,7 +281,8 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
       return res.status(400).json({ error: 'Dates invalides' });
     }
 
-    const cacheKey = `availability:${req.query.from}:${req.query.to}`;
+    const requestedOffset = Math.max(0, Number.parseInt(req.query.groupOffset || '0', 10) || 0);
+    const cacheKey = `availability:${req.query.from}:${req.query.to}:${requestedOffset}`;
     const cached = cacheGet(cacheKey, AVAILABILITY_CACHE_MS);
     if (cached) return res.json(cached);
 
@@ -297,7 +298,7 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
       getEquipment(),
       all('/projectequipmentgroup', {
         sort: '+id',
-        fields: 'id,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end'
+        fields: 'id,project,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end'
       }, { cacheMs: AVAILABILITY_CACHE_MS })
     ]);
 
@@ -311,7 +312,6 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
     // Process at most 18 relevant groups per browser request. The frontend follows
     // nextOffset and combines the deductions, so large periods remain exact while
     // every Worker invocation stays comfortably below Cloudflare's hard limit.
-    const requestedOffset = Math.max(0, Number.parseInt(req.query.groupOffset || '0', 10) || 0);
     const groupsPerInvocation = 20;
     const selectedGroups = relevantGroups.slice(requestedOffset, requestedOffset + groupsPerInvocation);
     const nextOffset = requestedOffset + selectedGroups.length < relevantGroups.length
@@ -333,6 +333,7 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
         return lines.map(line => ({
           ...line,
           parent: line.parent || group.id,
+          project: line.project || group.project,
           planperiod_start: line.planperiod_start || group.planperiod_start,
           planperiod_end: line.planperiod_end || group.planperiod_end,
           usageperiod_start: line.usageperiod_start || group.usageperiod_start,
@@ -341,6 +342,34 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
       }));
       planned.push(...rows.flat());
     }
+
+    const projectIds = [...new Set(planned.map(p => refId(p.project)).filter(Boolean))];
+    const projectMeta = new Map();
+    await Promise.all(projectIds.slice(0, 20).map(async projectId => {
+      try {
+        const raw = await rentman(`/projects/${projectId}`, {}, { cacheMs: AVAILABILITY_CACHE_MS });
+        const p = raw.data || raw;
+        const customerRef = p.customer || p.contact || p.client || p.contactperson || p.contact_person;
+        let customer = pick(p, ['customer_name','contact_name','client_name','account_name'], '');
+        if (!customer && customerRef) {
+          const cid = refId(customerRef);
+          if (cid) {
+            try {
+              const cr = await rentman(`/contacts/${cid}`, {}, { cacheMs: INVENTORY_CACHE_MS });
+              const c = cr.data || cr;
+              customer = pick(c, ['displayname','name','company_name'], '') || [pick(c,['first_name','firstname'],''),pick(c,['last_name','lastname'],'')].filter(Boolean).join(' ');
+            } catch (_) {}
+          }
+        }
+        projectMeta.set(projectId, {
+          projectId,
+          projectName: pick(p, ['name','project_name','displayname'], `Commande #${projectId}`),
+          customer: customer || 'Client Rentman'
+        });
+      } catch (_) {
+        projectMeta.set(projectId, { projectId, projectName: `Commande #${projectId}`, customer: 'Client Rentman' });
+      }
+    }));
 
     const byId = new Map(equipment.map(e => [Number(e.id), e]));
     const deductions = new Map();
@@ -379,8 +408,13 @@ app.get(['/api/availability', '/availability'], async (req, res) => {
         if (ps < new Date(existing.from)) existing.from = ps.toISOString();
         if (pe > new Date(existing.to)) existing.to = pe.toISOString();
       } else {
+        const projectId = refId(p.project);
+        const meta = projectMeta.get(projectId) || {};
         reservationMap.set(reservationKey, {
           id: reservationKey,
+          projectId: projectId || null,
+          projectName: meta.projectName || (projectId ? `Commande #${projectId}` : `Réservation #${reservationKey}`),
+          customer: meta.customer || 'Client Rentman',
           quantity: reservedQty,
           from: ps.toISOString(),
           to: pe.toISOString()
