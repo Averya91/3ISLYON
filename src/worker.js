@@ -2,11 +2,17 @@ import { env } from 'cloudflare:workers';
 import { httpServerHandler } from 'cloudflare:node';
 import app from '../server/index.js';
 
+const { processAutomaticReminders } = app;
+
 app.setWorkerEnv(env);
 app.listen(3000);
 const api = httpServerHandler({ port: 3000 });
 
 export default {
+  async scheduled(controller, bindings, ctx) {
+    app.setWorkerEnv(bindings);
+    ctx.waitUntil(processAutomaticReminders());
+  },
   async fetch(request, bindings, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/') && url.pathname !== '/health') {
