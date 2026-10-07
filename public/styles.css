@@ -37,3 +37,26 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
 
 /* V16.9 — tarifs panier */
 .cart-price{display:block;margin-top:7px;color:#ea3e43;font:700 11px 'Josefin Sans';letter-spacing:.03em}.cart-line-total{min-width:70px;text-align:right;font:700 12px 'Josefin Sans';color:#fff}.cart-total{margin-top:18px;padding:18px 0;border-top:1px solid #394147;border-bottom:1px solid #272e33;display:grid;grid-template-columns:1fr auto;gap:6px 16px;align-items:center}.cart-total span{font:700 10px 'Josefin Sans';letter-spacing:.08em;color:#9ca5ab}.cart-total strong{font:700 22px 'Josefin Sans';color:#fff}.cart-total small{grid-column:1/-1;color:#707a81;line-height:1.35}
+
+
+/* V16.12 — identité campus 3iS Lyon */
+.hero{height:520px;isolation:isolate}
+.hero-bg{background:linear-gradient(90deg,rgba(5,8,10,.96) 0%,rgba(5,8,10,.84) 38%,rgba(5,8,10,.28) 72%,rgba(5,8,10,.58) 100%),linear-gradient(0deg,rgba(9,13,16,.92) 0%,transparent 42%),url('assets/campus-lyon.jpg') center 52%/cover no-repeat}
+.hero-bg:after{background:linear-gradient(90deg,rgba(234,62,67,.12),transparent 34%),linear-gradient(0deg,#090d10 0%,transparent 24%)}
+.hero-copy{max-width:820px}.hero h1{font-size:clamp(64px,8vw,118px);text-shadow:0 12px 40px rgba(0,0,0,.32)}
+.hero-copy p:not(.eyebrow){max-width:520px;font-size:17px;color:#eef0f1}
+.hero-campus-label{position:absolute;z-index:4;right:max(30px,calc((100vw - 1280px)/2));bottom:72px;display:flex;align-items:center;gap:13px;padding:13px 17px;background:rgba(7,10,12,.68);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(12px)}
+.hero-campus-label span{font:700 25px 'Josefin Sans';color:#fff}.hero-campus-label small{padding-left:13px;border-left:1px solid rgba(255,255,255,.25);font:700 9px 'Josefin Sans';letter-spacing:.14em;color:#d6dadd}
+.search-panel{margin-top:-39px}
+.campus-strip{max-width:1280px;margin:72px auto 0;padding:0 30px;display:grid;grid-template-columns:minmax(0,1.55fr) minmax(300px,.75fr);min-height:360px}
+.campus-strip-image{min-height:360px;background:linear-gradient(90deg,transparent 60%,rgba(11,15,17,.25)),url('assets/campus-lyon-alt.jpg') center/cover no-repeat;border-radius:12px 0 0 12px;position:relative;overflow:hidden}
+.campus-strip-image:after{content:"";position:absolute;left:0;bottom:0;width:120px;height:12px;background:var(--red)}
+.campus-strip-copy{display:flex;flex-direction:column;justify-content:center;padding:42px;background:linear-gradient(145deg,#171c20,#101417);border:1px solid #293036;border-left:0;border-radius:0 12px 12px 0}
+.campus-strip-copy h2{font:700 clamp(31px,3.2vw,49px)/.95 'Josefin Sans';margin:0 0 18px;letter-spacing:-.035em}
+.campus-strip-copy>p:not(.eyebrow){color:#9ea7ad;margin:0 0 28px;max-width:420px}
+.campus-strip-copy>span{font:700 9px 'Josefin Sans';letter-spacing:.13em;color:#626c73}
+.category-wrap{padding-top:70px}
+.tracking-section{position:relative;overflow:hidden;background:linear-gradient(90deg,rgba(9,13,16,.97),rgba(9,13,16,.89)),url('assets/campus-lyon.jpg') center 45%/cover no-repeat;background-attachment:fixed}
+.tracking-section:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(234,62,67,.08),transparent 45%);pointer-events:none}.tracking-section>*{position:relative;z-index:1}
+@media(max-width:850px){.hero{height:430px}.hero-campus-label{right:18px;bottom:42px}.campus-strip{grid-template-columns:1fr;padding:0 18px;margin-top:55px}.campus-strip-image{min-height:260px;border-radius:10px 10px 0 0}.campus-strip-copy{border-left:1px solid #293036;border-top:0;border-radius:0 0 10px 10px;padding:30px}.tracking-section{background-attachment:scroll}}
+@media(max-width:650px){.hero{height:410px}.hero-bg{background-position:58% center}.hero-campus-label{display:none}.campus-strip-image{min-height:220px}}
