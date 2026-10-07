@@ -18,18 +18,25 @@ app.use(express.json({ limit: '1mb' }));
 // Rentman is the source of truth. We cache relatively static inventory data longer
 // than date-dependent availability data so the UI feels instant without hammering the API.
 const cache = new Map();
-const INVENTORY_CACHE_MS = 5 * 60_000;
-const AVAILABILITY_CACHE_MS = 5 * 60_000;
-const IMAGE_CACHE_MS = 10 * 60_000;
+const staleCache = new Map();
+const inflightRentman = new Map();
+const INVENTORY_CACHE_MS = 10 * 60_000;
+const AVAILABILITY_CACHE_MS = 10 * 60_000;
+const IMAGE_CACHE_MS = 30 * 60_000;
+const RENTMAN_STALE_MS = 60 * 60_000;
 
 function cacheGet(key, maxAge) {
   const hit = cache.get(key);
   return hit && Date.now() - hit.at < maxAge ? hit.data : null;
 }
-function cacheSet(key, data) { cache.set(key, { at: Date.now(), data }); return data; }
+function cacheSet(key, data) { const hit={ at:Date.now(), data }; cache.set(key,hit); staleCache.set(key,hit); return data; }
+function cacheStale(key, maxAge = RENTMAN_STALE_MS) {
+  const hit = cache.get(key) || staleCache.get(key);
+  return hit && Date.now() - hit.at < maxAge ? hit.data : null;
+}
 
 const RENTMAN_REQUEST_TIMEOUT_MS = 4500;
-const RENTMAN_MAX_RETRIES = 1;
+const RENTMAN_MAX_RETRIES = 2;
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -60,8 +67,8 @@ async function fetchRentman(url, { maxRetries = RENTMAN_MAX_RETRIES } = {}) {
     if (r.status === 429 && attempt < maxRetries) {
       const retryAfter = Number(r.headers.get('retry-after'));
       const backoff = Number.isFinite(retryAfter) && retryAfter > 0
-        ? Math.min(1500, retryAfter * 1000)
-        : 700;
+        ? Math.min(5000, retryAfter * 1000)
+        : Math.min(3200, 800 * Math.pow(2, attempt));
       attempt += 1;
       await sleep(backoff);
       continue;
@@ -95,8 +102,26 @@ async function rentman(pathname, params = {}, { cacheMs = 0 } = {}) {
     const cached = cacheGet(key, cacheMs);
     if (cached) return cached;
   }
-  const data = await fetchRentman(url.toString());
-  return cacheMs ? cacheSet(key, data) : data;
+  if (inflightRentman.has(key)) return inflightRentman.get(key);
+  const task = (async () => {
+    try {
+      const data = await fetchRentman(url.toString());
+      return cacheMs ? cacheSet(key, data) : data;
+    } catch (err) {
+      if (err?.status === 429 && cacheMs) {
+        const stale = cacheStale(key);
+        if (stale) return stale;
+        const friendly = new Error('Rentman est momentanément très sollicité. Les données vont se recharger automatiquement dans quelques secondes.');
+        friendly.status = 503;
+        throw friendly;
+      }
+      throw err;
+    } finally {
+      inflightRentman.delete(key);
+    }
+  })();
+  inflightRentman.set(key, task);
+  return task;
 }
 
 async function all(pathname, params = {}, options = {}) {
@@ -123,7 +148,7 @@ async function all(pathname, params = {}, options = {}) {
     }
     const pageUrl = new URL(next, baseUrl());
     if (pageUrl.origin !== new URL(baseUrl()).origin) throw Object.assign(new Error('URL de pagination Rentman invalide'), { status: 502 });
-    const j = await fetchRentman(pageUrl.toString(), { maxRetries: 0 });
+    const j = await fetchRentman(pageUrl.toString(), { maxRetries: 2 });
     data = data.concat(Array.isArray(j.data) ? j.data : []);
     next = j.next_page_url;
   }
