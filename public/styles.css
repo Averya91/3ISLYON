@@ -554,3 +554,15 @@ html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-
 #equipmentSubnav button.active{background:#202a31!important;color:#fff!important;border-left-color:#ef4047!important}
 html[data-theme="light"] #equipmentSubnav button:hover{background:#f0f3f5;color:#1d282f}
 html[data-theme="light"] #equipmentSubnav button.active{background:#e8edf0!important;color:#172027!important}
+
+
+/* V19.5.3 — clean equipment tree */
+.magasin-page #adminPanel{grid-template-columns:260px minmax(0,1fr)!important}
+.magasin-sidebar{width:260px!important}
+.nav-group{width:100%!important;min-width:0}
+#equipmentSubnav.open{display:flex!important;flex-direction:column!important;align-items:stretch!important;width:100%!important;gap:2px!important;padding:5px 0 7px 18px!important}
+#equipmentSubnav button{display:flex!important;align-items:center!important;gap:10px!important;width:100%!important;min-height:38px!important;padding:7px 11px!important;margin:0!important;border-radius:6px!important;box-sizing:border-box!important;white-space:nowrap!important}
+#equipmentSubnav button>i.bi{position:static!important;left:auto!important;top:auto!important;transform:none!important;flex:0 0 18px!important;width:18px!important;font-size:13px!important}
+#equipmentSubnav button>span{display:block!important;flex:1 1 auto!important;width:auto!important;min-width:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1!important}
+#equipmentSubnav button.active:before{left:0!important;top:6px!important;bottom:6px!important}
+@media(max-width:900px){.magasin-page #adminPanel{grid-template-columns:1fr!important}.magasin-sidebar{width:260px!important}}
