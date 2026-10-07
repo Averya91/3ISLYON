@@ -81,8 +81,8 @@ CREATE INDEX IF NOT EXISTS idx_reservation_documents_request ON reservation_docu
 -- V17.0 magasin platform
 CREATE TABLE IF NOT EXISTS magasin_users (
   id INTEGER PRIMARY KEY AUTOINCREMENT, role TEXT NOT NULL CHECK(role IN ('admin','staff')),
-  first_name TEXT NOT NULL,last_name TEXT NOT NULL,birth_date TEXT NOT NULL,track TEXT NOT NULL,
-  school_year TEXT NOT NULL CHECK(school_year IN ('A1','A2','A3')),email TEXT NOT NULL UNIQUE,phone TEXT NOT NULL,
+  first_name TEXT NOT NULL,last_name TEXT NOT NULL,track TEXT NOT NULL DEFAULT '',
+  school_year TEXT NOT NULL DEFAULT '',email TEXT NOT NULL UNIQUE,phone TEXT NOT NULL,
   photo_base64 TEXT NOT NULL DEFAULT '',password_hash TEXT NOT NULL,password_salt TEXT NOT NULL,
   totp_secret TEXT NOT NULL DEFAULT '',totp_enabled INTEGER NOT NULL DEFAULT 0,active INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL,updated_at TEXT NOT NULL
