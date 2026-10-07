@@ -699,6 +699,27 @@ app.post('/api/magasin/requests/:id/status', requireMagasin, async (req, res) =>
     res.json({ ok: true, status });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
+app.delete('/api/magasin/requests/:id', requireMagasin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    if (!id) return res.status(400).json({ error: 'Demande invalide.' });
+    const db = requireRequestsDb();
+    const exists = await db.prepare('SELECT id FROM reservations WHERE id = ?').bind(id).first();
+    if (!exists) return res.status(404).json({ error: 'Demande introuvable.' });
+
+    // Delete children explicitly: this remains reliable even if D1 foreign_keys
+    // is not enabled for the current connection.
+    await db.batch([
+      db.prepare('DELETE FROM reservation_messages WHERE reservation_id = ?').bind(id),
+      db.prepare('DELETE FROM reservation_items WHERE reservation_id = ?').bind(id),
+      db.prepare('DELETE FROM reservations WHERE id = ?').bind(id)
+    ]);
+    setTyping(id, 'staff', false);
+    setTyping(id, 'user', false);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
+});
+
 app.post('/api/magasin/requests/:id/message', requireMagasin, async (req, res) => {
   try {
     const id = Number(req.params.id), message = String(req.body?.message || '').trim();
