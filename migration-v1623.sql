@@ -1,0 +1,1 @@
+ALTER TABLE reservations ADD COLUMN account_manager TEXT NOT NULL DEFAULT '';
