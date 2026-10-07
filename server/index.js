@@ -973,9 +973,16 @@ app.get(['/api/equipment/:id/image', '/equipment/:id/image'], async (req, res) =
   }
 });
 
+async function processAutomaticReminders(){
+  const db=requireRequestsDb(),today=new Date().toISOString().slice(0,10),rows=await db.prepare("SELECT * FROM reservations WHERE status='accepted' AND archived=0 AND fulfillment_status NOT IN ('returned','closed') AND date_to<=?").bind(today).all();
+  let sent=0;for(const row of rows.results||[]){const last=String(row.last_reminder_at||'').slice(0,10);if(last===today)continue;const result=await sendReservationEmail(row,`Rappel retour matériel — demande #${row.id}`,mailHtml('Retour du matériel',`<p>Bonjour ${row.first_name},</p><p>Le matériel de votre demande #${row.id} est attendu au magasin 3iS Lyon depuis le ${row.date_to}.</p>`));if(result.sent){sent++;await db.prepare('UPDATE reservations SET last_reminder_at=? WHERE id=?').bind(new Date().toISOString(),row.id).run();}}
+  return {checked:(rows.results||[]).length,sent};
+}
+
 if (require.main === module) {
   app.listen(PORT, () => console.log(`3iS Store running on http://localhost:${PORT}`));
 }
 
 module.exports = app;
 module.exports.setWorkerEnv = setWorkerEnv;
+module.exports.processAutomaticReminders = processAutomaticReminders;
