@@ -74,3 +74,15 @@ npx wrangler secret put MAIL_FROM --name 3islyon
 `MAIL_FROM` doit être une adresse autorisée par le domaine vérifié chez le fournisseur e-mail, par exemple `Magasin 3iS Lyon <magasin@catalogue-3is.fr>`.
 
 Les pièces jointes sont volontairement limitées à 600 Ko par fichier dans cette version et stockées dans D1. Pour des fichiers lourds, migrer le stockage vers R2.
+
+
+## V17.3 — suppression définitive de la date de naissance
+
+Pour une base ayant déjà reçu la première migration V17.0, exécuter une fois :
+
+```bat
+npx wrangler d1 execute 3islyon-requests --remote --file=./migration-v173.sql
+npx wrangler deploy
+```
+
+Cette migration reconstruit la table `magasin_users` sans la colonne `birth_date` et conserve les comptes existants.
