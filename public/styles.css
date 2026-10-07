@@ -543,3 +543,14 @@ html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-
 #equipmentNav.expanded .nav-chevron{transform:rotate(180deg)}
 #equipmentSubnav.open{animation:equipmentMenuIn .16s ease both}
 @keyframes equipmentMenuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+
+/* V19.5.2 — vertical equipment submenu */
+.nav-group{display:block;width:100%}
+#equipmentSubnav.open{display:flex!important;flex-direction:column!important;width:100%;gap:2px;padding:5px 8px 7px 25px;box-sizing:border-box}
+#equipmentSubnav button{display:grid!important;grid-template-columns:20px minmax(0,1fr);align-items:center;width:100%!important;min-height:36px;padding:7px 10px!important;margin:0!important;border:0;border-left:2px solid transparent;border-radius:5px;background:transparent;text-align:left;color:#93a0a8}
+#equipmentSubnav button span{display:block;min-width:0;white-space:normal;line-height:1.2}
+#equipmentSubnav button:hover{background:#171e23;color:#eef1f2}
+#equipmentSubnav button.active{background:#202a31!important;color:#fff!important;border-left-color:#ef4047!important}
+html[data-theme="light"] #equipmentSubnav button:hover{background:#f0f3f5;color:#1d282f}
+html[data-theme="light"] #equipmentSubnav button.active{background:#e8edf0!important;color:#172027!important}
