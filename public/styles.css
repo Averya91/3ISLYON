@@ -488,3 +488,32 @@ html[data-theme="light"] .recommendation-admin,
 html[data-theme="light"] .rule-row,
 html[data-theme="light"] .calendar-head,
 html[data-theme="light"] #prepQueue{background:#fff!important;color:#202b32!important;border-color:#d9e0e4!important}
+
+
+/* V19.3 — final dark theme sweep + account navigation */
+html[data-theme="dark"] .magasin-page .calendar-head,
+html[data-theme="dark"] .magasin-page .workspace-toolbar,
+html[data-theme="dark"] .magasin-page .magasin-filters,
+html[data-theme="dark"] .magasin-page .request-list,
+html[data-theme="dark"] .magasin-page .request-list>article,
+html[data-theme="dark"] .magasin-page .request-list>button{background:#11171b!important;color:#e9edef!important;border-color:#293239!important}
+html[data-theme="dark"] .magasin-page .calendar-head *:not(input):not(button),
+html[data-theme="dark"] .magasin-page .account-editor *:not(input):not(select):not(button),
+html[data-theme="dark"] .magasin-page .recommendation-admin *:not(input):not(select):not(button):not(textarea){border-color:#293239}
+html[data-theme="dark"] .magasin-page .calendar-head h2,
+html[data-theme="dark"] .magasin-page .section-head h2,
+html[data-theme="dark"] .magasin-page .request-card b,
+html[data-theme="dark"] .magasin-page .request-card strong{color:#edf0f2!important}
+html[data-theme="dark"] .magasin-page .workspace-toolbar{border:1px solid #293239!important}
+html[data-theme="dark"] .magasin-page .tool-button{background:transparent!important;color:#849098!important}
+html[data-theme="dark"] .magasin-page .tool-button.active{background:#20282e!important;color:#fff!important}
+html[data-theme="dark"] .magasin-page .sync-state{color:#849098!important}
+html[data-theme="dark"] .magasin-page .magasin-filters button{background:transparent!important;color:#75828a!important}
+html[data-theme="dark"] .magasin-page .magasin-filters button.active{color:#fff!important;border-color:#ed3843!important}
+html[data-theme="dark"] .magasin-page #preparationView .calendar-head{border:1px solid #293239!important;border-radius:11px;padding:18px!important}
+html[data-theme="dark"] .magasin-page #accountsView>.calendar-head{border:1px solid #293239!important;border-radius:11px;padding:18px!important;margin-bottom:12px}
+html[data-theme="dark"] .magasin-page #accountsView>.calendar-head h2{color:#edf0f2!important}
+html[data-theme="dark"] .magasin-page .recommendation-admin{border-radius:11px}
+.account-nav{display:flex;align-items:center;gap:7px}.account-profile-button{display:flex;align-items:center;gap:9px;min-height:40px;padding:4px 9px 4px 5px;border:1px solid #293239;border-radius:8px;background:#141a1f;color:#fff;text-align:left;cursor:pointer}.account-profile-button:hover{background:#1b2329}.account-avatar{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border-radius:7px;overflow:hidden;background:#ed3843;color:#fff;font:700 9px 'Josefin Sans'}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-nav-copy{display:flex;min-width:74px;flex-direction:column;gap:1px}.account-nav-copy b{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 8px 'Josefin Sans';color:#e9edef}.account-nav-copy small{font:700 6px 'Josefin Sans';letter-spacing:.08em;color:#6f7b83}.logout-action{height:40px;padding:0 8px;border:0;background:transparent;color:#7c888f;font:700 7px 'Josefin Sans';cursor:pointer}.logout-action:hover{color:#ed4a53}
+html[data-theme="light"] .account-profile-button{background:#f4f6f7;border-color:#d8dfe4;color:#172027}.account-profile-button:hover{background:#edf1f3}html[data-theme="light"] .account-nav-copy b{color:#253139}
+@media(max-width:900px){.account-nav-copy,.logout-action{display:none}.account-profile-button{padding:4px}}
