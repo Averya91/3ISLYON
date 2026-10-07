@@ -52,3 +52,25 @@ npx wrangler deploy
 ```
 
 Flux V16.5 : catalogue → demande locale D1 → espace magasin → accepter/refuser + messagerie. L'acceptation ne crée pas encore automatiquement un projet Rentman : cette étape sera raccordée séparément à `POST /projects` après validation du flux et des champs BETA de l'API Rentman.
+
+
+## V16.20 — migration D1 et notifications e-mail
+
+Avant de déployer V16.20 sur une base déjà existante, appliquer une seule fois :
+
+```bat
+npx wrangler d1 execute 3islyon-requests --remote --file=./migration-v1620.sql
+```
+
+La suite magasin ajoute : archivage, calendrier, workflow de préparation/retrait/retour, contrôle de stock avant acceptation, modification des quantités, pièces jointes, historique d'activité, QR de retrait et génération devis/facture.
+
+Les notifications e-mail sont optionnelles. Elles utilisent l'API HTTP Resend uniquement si ces deux secrets/variables sont configurés :
+
+```bat
+npx wrangler secret put RESEND_API_KEY --name 3islyon
+npx wrangler secret put MAIL_FROM --name 3islyon
+```
+
+`MAIL_FROM` doit être une adresse autorisée par le domaine vérifié chez le fournisseur e-mail, par exemple `Magasin 3iS Lyon <magasin@catalogue-3is.fr>`.
+
+Les pièces jointes sont volontairement limitées à 600 Ko par fichier dans cette version et stockées dans D1. Pour des fichiers lourds, migrer le stockage vers R2.
