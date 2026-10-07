@@ -648,3 +648,53 @@ img{content-visibility:auto}
 @keyframes panelFluidIn{from{opacity:0;transform:translateY(8px) scale(.992)}to{opacity:1;transform:none}}
 @keyframes drawerFluidIn{from{transform:translateX(18px);opacity:.6}to{transform:translateX(0);opacity:1}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+
+
+/* V20 — système d'animations global 3iS */
+:root{--motion-fast:140ms;--motion-ui:220ms;--motion-page:480ms;--motion-slow:900ms;--motion-ease:cubic-bezier(.22,1,.36,1);--motion-standard:cubic-bezier(.4,0,.2,1)}
+html{scroll-behavior:smooth}
+body.motion-ready{opacity:1}
+body.motion-boot:not(.motion-ready){opacity:0}
+body.motion-ready{animation:motionBodyIn var(--motion-page) var(--motion-ease) both}
+@keyframes motionBodyIn{from{opacity:0}to{opacity:1}}
+.motion-reveal{opacity:0;transform:translate3d(0,24px,0);transition:opacity 620ms var(--motion-ease),transform 620ms var(--motion-ease)}
+.motion-reveal.motion-visible{opacity:1;transform:none}
+.motion-reveal[data-motion="left"]{transform:translate3d(-24px,0,0)}.motion-reveal[data-motion="right"]{transform:translate3d(24px,0,0)}.motion-reveal.motion-visible{transform:none}
+.topbar,.magasin-appbar,.wiki-appbar{animation:motionHeaderIn 520ms var(--motion-ease) both}
+@keyframes motionHeaderIn{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+.hero-bg{animation:motionHeroBg 1.25s var(--motion-ease) both}.hero-copy{animation:motionHeroCopy .78s .12s var(--motion-ease) both}.hero-wave{animation:motionHeroWave 1s .2s var(--motion-ease) both}.hero-campus-label,.hero-corner{animation:motionHeroAccent .7s .32s var(--motion-ease) both}
+@keyframes motionHeroBg{from{opacity:.2;transform:scale(1.045)}to{opacity:1;transform:scale(1)}}@keyframes motionHeroCopy{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}@keyframes motionHeroWave{from{opacity:0;transform:translateX(45px) scale(.96)}to{transform:none}}@keyframes motionHeroAccent{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:none}}
+.equipment,.request-card,.wiki-section,.calendar-day,.dashboard-stat,.home-action-card,.notification-item,.search-result{transition:transform var(--motion-ui) var(--motion-ease),border-color var(--motion-ui) ease,background-color var(--motion-ui) ease,box-shadow var(--motion-ui) ease,opacity var(--motion-ui) ease}
+.equipment:hover,.request-card:hover,.home-action-card:hover{transform:translateY(-3px);box-shadow:0 14px 34px #0003}
+button,a,.role-btn,.page-btn,.icon-action{transition:transform var(--motion-fast) var(--motion-ease),background-color var(--motion-ui) ease,border-color var(--motion-ui) ease,color var(--motion-ui) ease,opacity var(--motion-ui) ease,box-shadow var(--motion-ui) ease}
+button:active,.page-btn:active,.icon-action:active{transform:scale(.975)}
+.magasin-workspace>[id$="View"]:not(.hidden){animation:motionViewIn 360ms var(--motion-ease) both}
+@keyframes motionViewIn{from{opacity:0;transform:translate3d(0,12px,0)}to{opacity:1;transform:none}}
+.modal:not(.hidden),.checkout:not(.hidden),.success:not(.hidden),#globalSearch:not(.hidden){animation:motionBackdropIn 180ms ease both}.modal:not(.hidden) .modal-card,.checkout:not(.hidden)>div,.success:not(.hidden)>div,#globalSearch:not(.hidden) .modal-card{animation:motionDialogIn 320ms var(--motion-ease) both}
+@keyframes motionBackdropIn{from{opacity:0}to{opacity:1}}@keyframes motionDialogIn{from{opacity:0;transform:translateY(18px) scale(.975)}to{opacity:1;transform:none}}
+.cart-drawer{transition:transform 360ms var(--motion-ease),opacity 260ms ease,visibility 260ms ease!important}.cart-drawer.open{animation:none!important}
+.sidebar-subnav.open{transform-origin:top;animation:motionMenuIn 240ms var(--motion-ease) both}@keyframes motionMenuIn{from{opacity:0;transform:translateY(-7px) scaleY(.96)}to{opacity:1;transform:none}}
+.loader-ring{animation-duration:.85s!important}
+.wiki-group{animation:none!important}.wiki-section{content-visibility:auto;contain-intrinsic-size:210px}.wiki-nav-group a:hover{transform:translateX(4px)!important}
+.portal-login{animation:portalArrival 720ms var(--motion-ease) both!important}.portal-login-content{animation:portalContentArrival 760ms 120ms var(--motion-ease) both!important}
+.portal-stage{background:radial-gradient(circle at 50% 46%,rgba(239,64,71,.11),transparent 30%)!important}
+.portal-halo-a{animation:portalOrbitA 7s linear infinite!important}.portal-halo-b{animation:portalOrbitB 5.4s linear infinite!important}
+.portal-gate span{animation:portalGateBreath 4.8s ease-in-out infinite!important}.portal-gate span:nth-child(2){animation-delay:-1.6s!important}.portal-gate span:nth-child(3){animation-delay:-3.2s!important}
+.portal-scan{animation:portalScanner 3.6s var(--motion-standard) infinite!important}
+.portal-status-dot{animation:portalStatusPulse 2.2s ease-in-out infinite!important}
+.portal-authenticating .portal-auth-overlay{animation:portalVerifyIn 260ms ease both!important}.portal-authenticating .portal-auth-ring{animation:portalAuthSpin .9s linear infinite!important}
+.portal-granted .portal-auth-overlay{animation:portalUnlock 760ms var(--motion-ease) forwards!important}.portal-granted .portal-auth-ring{animation:portalRingUnlock 720ms var(--motion-ease) forwards!important}
+.portal-denied{animation:portalDenied 360ms var(--motion-standard)!important}
+@keyframes portalArrival{from{opacity:0;transform:perspective(900px) translateY(20px) scale(.96);filter:blur(7px)}to{opacity:1;transform:none;filter:none}}
+@keyframes portalContentArrival{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes portalOrbitA{0%{transform:translate(-50%,-50%) rotate(0) scale(.96);opacity:.2}50%{opacity:.52}100%{transform:translate(-50%,-50%) rotate(360deg) scale(.96);opacity:.2}}
+@keyframes portalOrbitB{0%{transform:translate(-50%,-50%) rotate(360deg) scale(1.02);opacity:.46}50%{opacity:.18}100%{transform:translate(-50%,-50%) rotate(0) scale(1.02);opacity:.46}}
+@keyframes portalGateBreath{0%,100%{opacity:.18;transform:translateX(-8px)}50%{opacity:.72;transform:translateX(8px)}}
+@keyframes portalScanner{0%{top:7%;opacity:0}12%{opacity:.75}50%{opacity:.38}88%{opacity:.75}100%{top:93%;opacity:0}}
+@keyframes portalStatusPulse{0%,100%{opacity:1;box-shadow:0 0 0 4px rgba(239,64,71,.1)}50%{opacity:.55;box-shadow:0 0 0 8px rgba(239,64,71,0)}}
+@keyframes portalVerifyIn{from{opacity:0;backdrop-filter:blur(0)}to{opacity:1;backdrop-filter:blur(9px)}}
+@keyframes portalAuthSpin{to{transform:rotate(360deg)}}
+@keyframes portalUnlock{0%{opacity:1;clip-path:inset(0 0 0 0)}55%{opacity:1;clip-path:inset(0 46% 0 46%)}100%{opacity:0;clip-path:inset(0 50% 0 50%);transform:scaleX(1.08)}}
+@keyframes portalRingUnlock{0%{transform:scale(1);opacity:1}55%{transform:scale(1.5);opacity:1;border-color:#66dfa0}100%{transform:scale(3.4);opacity:0}}
+@keyframes portalDenied{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}.motion-reveal,.motion-reveal.motion-visible{opacity:1!important;transform:none!important}*,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
