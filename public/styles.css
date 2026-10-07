@@ -435,3 +435,56 @@ html[data-theme="light"] .v19-equipment-row>span strong,html[data-theme="light"]
 html[data-theme="light"] .equipment-search,html[data-theme="light"] .equipment-search input,html[data-theme="light"] .equipment-filterbar select,html[data-theme="light"] .equipment-filterbar>input{background:#f5f7f8!important;border-color:#d5dde2!important;color:#29353d!important;color-scheme:light}
 html[data-theme="light"] .soft-btn{background:#fff;color:#4b5962;border-color:#d3dce1}
 html[data-theme="light"] .active-filter-chips span{background:#edf1f3;color:#58666f}
+
+
+/* V19.2 — complete theme coverage */
+html[data-theme="dark"] .magasin-page .counter-panel,
+html[data-theme="dark"] .magasin-page .counter-card,
+html[data-theme="dark"] .magasin-page .account-editor,
+html[data-theme="dark"] .magasin-page .staff-list,
+html[data-theme="dark"] .magasin-page .staff-row,
+html[data-theme="dark"] .magasin-page .twofa-card,
+html[data-theme="dark"] .magasin-page .recommendation-admin,
+html[data-theme="dark"] .magasin-page .rule-row,
+html[data-theme="dark"] .magasin-page .calendar-head,
+html[data-theme="dark"] .magasin-page .request-detail,
+html[data-theme="dark"] .magasin-page .detail-section,
+html[data-theme="dark"] .magasin-page .equipment-manager-section,
+html[data-theme="dark"] .magasin-page .equipment-manager-card,
+html[data-theme="dark"] .magasin-page .side-panel,
+html[data-theme="dark"] .magasin-page .search-command,
+html[data-theme="dark"] .magasin-page .search-result,
+html[data-theme="dark"] .magasin-page .prep-queue,
+html[data-theme="dark"] .magasin-page #prepQueue{background:#11171b!important;color:#e9edef!important;border-color:#293239!important}
+html[data-theme="dark"] .magasin-page .counter-panel h2,
+html[data-theme="dark"] .magasin-page .account-editor h3,
+html[data-theme="dark"] .magasin-page .recommendation-admin h3,
+html[data-theme="dark"] .magasin-page .calendar-head h2,
+html[data-theme="dark"] .magasin-page .twofa-card h3{color:#edf0f2!important}
+html[data-theme="dark"] .magasin-page .counter-panel p,
+html[data-theme="dark"] .magasin-page .recommendation-admin p,
+html[data-theme="dark"] .magasin-page .muted{color:#839099!important}
+html[data-theme="dark"] .magasin-page .account-editor input,
+html[data-theme="dark"] .magasin-page .account-editor select,
+html[data-theme="dark"] .magasin-page .photo-field,
+html[data-theme="dark"] .magasin-page .recommendation-admin input,
+html[data-theme="dark"] .magasin-page .recommendation-admin select,
+html[data-theme="dark"] .magasin-page .recommendation-admin textarea,
+html[data-theme="dark"] .magasin-page .counter-panel input{background:#0c1114!important;color:#e8ecee!important;border-color:#344048!important}
+html[data-theme="dark"] .magasin-page .account-editor input::placeholder,
+html[data-theme="dark"] .magasin-page .recommendation-admin input::placeholder,
+html[data-theme="dark"] .magasin-page .counter-panel input::placeholder{color:#6f7c85!important}
+html[data-theme="dark"] .magasin-page input[type="file"]::file-selector-button{background:#20282e;color:#e7ebed;border:1px solid #39454d;border-radius:5px;padding:5px 8px}
+html[data-theme="dark"] .magasin-page #prepQueue:empty{background:#11171b!important}
+.profile-account-head{display:flex;align-items:center;gap:15px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid #dbe1e5}.profile-account-head h3{margin:3px 0 2px!important}.profile-role{color:#7b8891;font-size:9px}.profile-avatar{width:70px;height:70px;flex:0 0 70px;display:grid;place-items:center;border-radius:14px;overflow:hidden;background:linear-gradient(145deg,#ed3843,#a71e29);color:#fff;font:700 17px 'Josefin Sans';box-shadow:0 8px 24px #0002}.profile-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+html[data-theme="dark"] .profile-account-head{border-color:#293239}
+html[data-theme="light"] .counter-panel,
+html[data-theme="light"] .counter-card,
+html[data-theme="light"] .account-editor,
+html[data-theme="light"] .staff-list,
+html[data-theme="light"] .staff-row,
+html[data-theme="light"] .twofa-card,
+html[data-theme="light"] .recommendation-admin,
+html[data-theme="light"] .rule-row,
+html[data-theme="light"] .calendar-head,
+html[data-theme="light"] #prepQueue{background:#fff!important;color:#202b32!important;border-color:#d9e0e4!important}
