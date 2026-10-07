@@ -517,3 +517,20 @@ html[data-theme="dark"] .magasin-page .recommendation-admin{border-radius:11px}
 .account-nav{display:flex;align-items:center;gap:7px}.account-profile-button{display:flex;align-items:center;gap:9px;min-height:40px;padding:4px 9px 4px 5px;border:1px solid #293239;border-radius:8px;background:#141a1f;color:#fff;text-align:left;cursor:pointer}.account-profile-button:hover{background:#1b2329}.account-avatar{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border-radius:7px;overflow:hidden;background:#ed3843;color:#fff;font:700 9px 'Josefin Sans'}.account-avatar img{width:100%;height:100%;object-fit:cover}.account-nav-copy{display:flex;min-width:74px;flex-direction:column;gap:1px}.account-nav-copy b{max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 8px 'Josefin Sans';color:#e9edef}.account-nav-copy small{font:700 6px 'Josefin Sans';letter-spacing:.08em;color:#6f7b83}.logout-action{height:40px;padding:0 8px;border:0;background:transparent;color:#7c888f;font:700 7px 'Josefin Sans';cursor:pointer}.logout-action:hover{color:#ed4a53}
 html[data-theme="light"] .account-profile-button{background:#f4f6f7;border-color:#d8dfe4;color:#172027}.account-profile-button:hover{background:#edf1f3}html[data-theme="light"] .account-nav-copy b{color:#253139}
 @media(max-width:900px){.account-nav-copy,.logout-action{display:none}.account-profile-button{padding:4px}}
+
+
+/* V19.4 — Bootstrap navigation icons + definitive dark panels */
+.magasin-view-switch button>i.bi,.sidebar-bottom a>i.bi{width:22px;display:inline-flex;align-items:center;justify-content:center;font-size:16px;line-height:1;color:#91a0aa;font-style:normal}
+.magasin-view-switch button.active>i.bi,.nav-group>button.active>i.bi{color:#fff}
+.sidebar-subnav button>i.bi{width:18px;display:inline-flex;justify-content:center;font-size:13px;color:#71808a}
+.sidebar-subnav button.active>i.bi{color:#ef4047}
+.nav-chevron i.bi{font-size:11px;color:inherit}
+html[data-theme="light"] .magasin-view-switch button>i.bi,html[data-theme="light"] .sidebar-bottom a>i.bi{color:#53626c}
+html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head,
+html[data-theme="dark"] body.magasin-page #accountsView>.calendar-head{background:#11171b!important;background-image:none!important;color:#e9edef!important;border-color:#293239!important;box-shadow:none!important}
+html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head h2,
+html[data-theme="dark"] body.magasin-page #accountsView>.calendar-head h2{color:#f1f3f4!important}
+html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head p:not(.eyebrow),
+html[data-theme="dark"] body.magasin-page #accountsView>.calendar-head p:not(.eyebrow){color:#89969e!important}
+html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-reservation{background:transparent!important}
+html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-reservation input{background:#0b1013!important;color:#e9edef!important;border-color:#344048!important}
