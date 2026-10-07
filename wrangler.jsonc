@@ -13,6 +13,7 @@
   "vars": {
     "RENTMAN_BASE_URL": "https://api.rentman.net"
   },
+  "triggers": { "crons": ["15 7 * * *"] },
   "observability": {
     "enabled": true
   },
