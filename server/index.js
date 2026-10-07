@@ -596,13 +596,56 @@ function magasinAuthorized(req) {
   const supplied = String(req.get('x-magasin-secret') || '');
   return Boolean(expected) && supplied.length === expected.length && supplied === expected;
 }
-function requireMagasin(req, res, next) {
-  if (!magasinAuthorized(req)) return res.status(401).json({ error: 'Accès magasin refusé.' });
-  next();
+function bytesToHex(bytes){return [...new Uint8Array(bytes)].map(b=>b.toString(16).padStart(2,'0')).join('')}
+function randomToken(bytes=32){const a=new Uint8Array(bytes);crypto.getRandomValues(a);return bytesToHex(a)}
+async function sha256(v){return bytesToHex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(String(v))))}
+async function passwordHash(password,salt){
+  const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(String(password)),'PBKDF2',false,['deriveBits']);
+  return bytesToHex(await crypto.subtle.deriveBits({name:'PBKDF2',salt:new TextEncoder().encode(salt),iterations:160000,hash:'SHA-256'},key,256));
 }
+function base32Decode(s){const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',clean=String(s).replace(/=|\s/g,'').toUpperCase();let bits='',out=[];for(const c of clean){const v=alphabet.indexOf(c);if(v<0)continue;bits+=v.toString(2).padStart(5,'0')}for(let i=0;i+8<=bits.length;i+=8)out.push(parseInt(bits.slice(i,i+8),2));return new Uint8Array(out)}
+function base32Random(){const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ234567',a=new Uint8Array(20);crypto.getRandomValues(a);let bits=[...a].map(x=>x.toString(2).padStart(8,'0')).join(''),out='';for(let i=0;i<bits.length;i+=5)out+=alphabet[parseInt(bits.slice(i,i+5).padEnd(5,'0'),2)];return out}
+async function totp(secret,offset=0){const counter=Math.floor(Date.now()/30000)+offset,b=new ArrayBuffer(8),v=new DataView(b);v.setUint32(4,counter);const key=await crypto.subtle.importKey('raw',base32Decode(secret),{name:'HMAC',hash:'SHA-1'},false,['sign']);const sig=new Uint8Array(await crypto.subtle.sign('HMAC',key,b)),o=sig[sig.length-1]&15,n=((sig[o]&127)<<24|(sig[o+1]&255)<<16|(sig[o+2]&255)<<8|(sig[o+3]&255))%1000000;return String(n).padStart(6,'0')}
+async function verifyTotp(secret,code){for(let o=-1;o<=1;o++)if(await totp(secret,o)===String(code||'').trim())return true;return false}
+async function sessionUser(req){
+  const raw=String(req.get('authorization')||'').replace(/^Bearer\s+/i,'').trim();if(!raw)return null;
+  const row=await requireRequestsDb().prepare(`SELECT u.* FROM magasin_sessions s JOIN magasin_users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>? AND u.active=1`).bind(await sha256(raw),new Date().toISOString()).first();
+  return row||null;
+}
+async function requireMagasin(req,res,next){
+  try{const user=await sessionUser(req);if(user){req.magasinUser=user;return next()}if(magasinAuthorized(req))return next();return res.status(401).json({error:'Connexion magasin requise.'})}catch(e){res.status(500).json({error:e.message})}
+}
+function requireAdmin(req,res,next){if(req.magasinUser?.role==='admin')return next();return res.status(403).json({error:'Compte responsable magasin requis.'})}
 function magasinActor(req) {
+  if(req.magasinUser)return [req.magasinUser.first_name,req.magasinUser.last_name].filter(Boolean).join(' ');
   return String(req.get('x-magasin-actor') || 'Magasin').trim().slice(0, 80) || 'Magasin';
 }
+
+app.get('/api/magasin/auth/bootstrap-status',async(req,res)=>{try{const row=await requireRequestsDb().prepare("SELECT COUNT(*) AS n FROM magasin_users WHERE role='admin'").first();res.json({needsBootstrap:Number(row?.n||0)===0})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/auth/bootstrap',async(req,res)=>{try{
+  const db=requireRequestsDb(),count=await db.prepare("SELECT COUNT(*) AS n FROM magasin_users WHERE role='admin'").first();if(Number(count?.n||0)>0)return res.status(409).json({error:'Le compte responsable existe déjà.'});
+  if(!magasinAuthorized(req))return res.status(403).json({error:"Le secret d'installation magasin est requis."});
+  const b=req.body||{},email=lower(b.email);if(!email.endsWith('@3is.fr')||!safeEmail(email))return res.status(400).json({error:'Adresse @3is.fr obligatoire.'});if(String(b.password||'').length<12)return res.status(400).json({error:'Mot de passe : 12 caractères minimum.'});
+  if(!['A1','A2','A3'].includes(b.schoolYear))return res.status(400).json({error:'Année scolaire invalide.'});
+  const salt=randomToken(16),hash=await passwordHash(b.password,salt),now=new Date().toISOString();
+  await db.prepare(`INSERT INTO magasin_users(role,first_name,last_name,birth_date,track,school_year,email,phone,photo_base64,password_hash,password_salt,created_at,updated_at) VALUES('admin',?,?,?,?,?,?,?,?,?,?,?,?)`).bind(String(b.firstName||'').trim(),String(b.lastName||'').trim(),String(b.birthDate||''),String(b.track||''),b.schoolYear,email,String(b.phone||''),String(b.photo||''),hash,salt,now,now).run();
+  res.json({ok:true});
+}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/auth/login',async(req,res)=>{try{
+  const db=requireRequestsDb(),email=lower(req.body?.email),row=await db.prepare('SELECT * FROM magasin_users WHERE email=? AND active=1').bind(email).first();if(!row)return res.status(401).json({error:'Identifiants invalides.'});
+  const hash=await passwordHash(req.body?.password||'',row.password_salt);if(hash!==row.password_hash)return res.status(401).json({error:'Identifiants invalides.'});
+  if(row.totp_enabled&&!await verifyTotp(row.totp_secret,req.body?.code))return res.status(401).json({error:'Code A2F requis ou invalide.',needs2fa:true});
+  const token=randomToken(32),now=new Date(),exp=new Date(now.getTime()+12*3600000);await db.prepare('INSERT INTO magasin_sessions(token_hash,user_id,expires_at,created_at) VALUES(?,?,?,?)').bind(await sha256(token),row.id,exp.toISOString(),now.toISOString()).run();
+  res.json({ok:true,token,user:{id:row.id,role:row.role,firstName:row.first_name,lastName:row.last_name,email:row.email,totpEnabled:Boolean(row.totp_enabled)}});
+}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/auth/logout',requireMagasin,async(req,res)=>{try{const raw=String(req.get('authorization')||'').replace(/^Bearer\s+/i,'').trim();if(raw)await requireRequestsDb().prepare('DELETE FROM magasin_sessions WHERE token_hash=?').bind(await sha256(raw)).run();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/me',requireMagasin,(req,res)=>{const u=req.magasinUser;if(!u)return res.json({legacy:true,role:'admin'});res.json({id:u.id,role:u.role,firstName:u.first_name,lastName:u.last_name,email:u.email,photo:u.photo_base64,totpEnabled:Boolean(u.totp_enabled)})});
+app.post('/api/magasin/me/2fa/setup',requireMagasin,async(req,res)=>{try{if(!req.magasinUser)return res.status(400).json({error:'Compte utilisateur requis.'});const secret=base32Random();await requireRequestsDb().prepare('UPDATE magasin_users SET totp_secret=?,totp_enabled=0,updated_at=? WHERE id=?').bind(secret,new Date().toISOString(),req.magasinUser.id).run();res.json({secret,uri:`otpauth://totp/3iS%20Lyon:${encodeURIComponent(req.magasinUser.email)}?secret=${secret}&issuer=3iS%20Lyon`})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/me/2fa/enable',requireMagasin,async(req,res)=>{try{const row=await requireRequestsDb().prepare('SELECT * FROM magasin_users WHERE id=?').bind(req.magasinUser?.id).first();if(!row?.totp_secret||!await verifyTotp(row.totp_secret,req.body?.code))return res.status(400).json({error:'Code A2F invalide.'});await requireRequestsDb().prepare('UPDATE magasin_users SET totp_enabled=1,updated_at=? WHERE id=?').bind(new Date().toISOString(),row.id).run();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/admin/users',requireMagasin,requireAdmin,async(req,res)=>{try{const x=await requireRequestsDb().prepare('SELECT id,role,first_name AS firstName,last_name AS lastName,birth_date AS birthDate,track,school_year AS schoolYear,email,phone,photo_base64 AS photo,totp_enabled AS totpEnabled,active,created_at AS createdAt FROM magasin_users ORDER BY last_name,first_name').all();res.json({items:x.results||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/admin/users',requireMagasin,requireAdmin,async(req,res)=>{try{const b=req.body||{},email=lower(b.email);if(!email.endsWith('@3is.fr')||!safeEmail(email))return res.status(400).json({error:'Adresse scolaire @3is.fr obligatoire.'});if(String(b.password||'').length<12)return res.status(400).json({error:'Mot de passe temporaire : 12 caractères minimum.'});if(!['A1','A2','A3'].includes(b.schoolYear))return res.status(400).json({error:'Année invalide.'});const salt=randomToken(16),hash=await passwordHash(b.password,salt),now=new Date().toISOString();const x=await requireRequestsDb().prepare(`INSERT INTO magasin_users(role,first_name,last_name,birth_date,track,school_year,email,phone,photo_base64,password_hash,password_salt,created_at,updated_at) VALUES('staff',?,?,?,?,?,?,?,?,?,?,?,?)`).bind(String(b.firstName||'').trim(),String(b.lastName||'').trim(),String(b.birthDate||''),String(b.track||''),b.schoolYear,email,String(b.phone||''),String(b.photo||''),hash,salt,now,now).run();res.json({ok:true,id:x.meta?.last_row_id})}catch(e){res.status(409).json({error:e.message})}});
+app.put('/api/magasin/admin/users/:id',requireMagasin,requireAdmin,async(req,res)=>{try{const id=Number(req.params.id),b=req.body||{},email=lower(b.email);if(!email.endsWith('@3is.fr'))return res.status(400).json({error:'Adresse @3is.fr obligatoire.'});await requireRequestsDb().prepare('UPDATE magasin_users SET first_name=?,last_name=?,birth_date=?,track=?,school_year=?,email=?,phone=?,photo_base64=?,active=?,updated_at=? WHERE id=?').bind(b.firstName,b.lastName,b.birthDate,b.track,b.schoolYear,email,b.phone,b.photo||'',b.active===false?0:1,new Date().toISOString(),id).run();res.json({ok:true})}catch(e){res.status(409).json({error:e.message})}});
+app.delete('/api/magasin/admin/users/:id',requireMagasin,requireAdmin,async(req,res)=>{try{const id=Number(req.params.id);if(id===req.magasinUser.id)return res.status(400).json({error:'Impossible de supprimer ton propre compte.'});const db=requireRequestsDb();await db.batch([db.prepare('DELETE FROM magasin_sessions WHERE user_id=?').bind(id),db.prepare("DELETE FROM magasin_users WHERE id=? AND role='staff'").bind(id)]);res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
 function reservationFromRow(row, messages = []) {
   return {
     id: row.id, name: row.name, role: row.role, status: row.status,
@@ -614,6 +657,7 @@ function reservationFromRow(row, messages = []) {
     firstName: row.first_name, lastName: row.last_name, email: row.email,
     createdAt: row.created_at, updatedAt: row.updated_at,
     accountManager: row.account_manager || '',
+    rentmanProjectId: row.rentman_project_id || null, pickupToken: row.pickup_token || '',
     messages
   };
 }
@@ -625,10 +669,13 @@ async function loadLocalReservation(id) {
   const messages = await db.prepare('SELECT id, author, message, created_at AS createdAt FROM reservation_messages WHERE reservation_id = ? ORDER BY id').bind(id).all();
   const attachments = await db.prepare('SELECT id, name, mime_type AS type, size, author, created_at AS createdAt FROM reservation_attachments WHERE reservation_id = ? ORDER BY id').bind(id).all();
   const activity = await db.prepare('SELECT id, actor, action, details, created_at AS createdAt FROM reservation_activity WHERE reservation_id = ? ORDER BY id DESC LIMIT 100').bind(id).all();
+  const incidents = await db.prepare('SELECT * FROM reservation_incidents WHERE reservation_id=? ORDER BY id DESC').bind(id).all();
+  const unitEvents = await db.prepare('SELECT e.*,u.label,u.barcode,u.serial_number AS serialNumber FROM reservation_unit_events e LEFT JOIN equipment_units u ON u.id=e.unit_id WHERE e.reservation_id=? ORDER BY e.id DESC').bind(id).all();
+  const documents = await db.prepare('SELECT id,type,total,created_at AS createdAt FROM reservation_documents WHERE reservation_id=? ORDER BY id DESC').bind(id).all();
   let priceMap = new Map();
   try { priceMap = new Map((await getEquipment()).map(x => [Number(x.id), Number(x.rentalPrice) || 0])); } catch (_) {}
   const equipment = (equipmentRows.results || []).map(x => ({ ...x, unitPrice: priceMap.get(Number(x.equipmentId)) || 0 }));
-  return { reservation: reservationFromRow(row, messages.results || []), equipment, attachments: attachments.results || [], activity: activity.results || [] };
+  return { reservation: reservationFromRow(row, messages.results || []), equipment, attachments: attachments.results || [], activity: activity.results || [], incidents:incidents.results||[], unitEvents:unitEvents.results||[], documents:documents.results||[] };
 }
 
 app.post('/api/reservations', async (req, res) => {
@@ -769,9 +816,29 @@ async function checkReservationStock(id) {
     try { return await all(`/projectequipmentgroup/${g.id}/projectequipment`,{sort:'+id',fields:'id,equipment,linked_equipment,quantity,is_option,warehouse_reservations'},{cacheMs:AVAILABILITY_CACHE_MS}); } catch (_) { return []; }
   }));
   for (const p of rows.flat()) { if(p.is_option===true)continue;const eid=refId(p.equipment||p.linked_equipment),q=Math.max(0,number(p.warehouse_reservations,0));if(eid&&q)deductions.set(eid,(deductions.get(eid)||0)+q); }
-  const items = data.equipment.map(line=>{const e=byId.get(Number(line.equipmentId)),available=e?.stockKnown?Math.max(0,e.currentStock-(deductions.get(Number(line.equipmentId))||0)):null;return {equipmentId:line.equipmentId,name:line.name,requested:Number(line.quantity),available,ok:available===null||available>=Number(line.quantity)}});
+  const db=requireRequestsDb(), altRows=await db.prepare('SELECT equipment_id AS equipmentId,alternative_equipment_id AS alternativeId FROM equipment_alternatives').all(),altMap=new Map();
+  for(const a of altRows.results||[]){if(!altMap.has(Number(a.equipmentId)))altMap.set(Number(a.equipmentId),[]);const ae=byId.get(Number(a.alternativeId));if(ae)altMap.get(Number(a.equipmentId)).push({id:ae.id,name:ae.name,available:ae.stockKnown?Math.max(0,ae.currentStock-(deductions.get(Number(ae.id))||0)):null})}
+  const items = data.equipment.map(line=>{const e=byId.get(Number(line.equipmentId)),available=e?.stockKnown?Math.max(0,e.currentStock-(deductions.get(Number(line.equipmentId))||0)):null;return {equipmentId:line.equipmentId,name:line.name,requested:Number(line.quantity),available,ok:available===null||available>=Number(line.quantity),alternatives:altMap.get(Number(line.equipmentId))||[]}});
   return { ok:items.every(x=>x.ok), complete:relevant.length<=20, items };
 }
+
+async function ensurePickupToken(id){const db=requireRequestsDb(),row=await db.prepare('SELECT pickup_token FROM reservations WHERE id=?').bind(id).first();if(row?.pickup_token)return row.pickup_token;const token=randomToken(16);await db.prepare('UPDATE reservations SET pickup_token=? WHERE id=?').bind(token,id).run();return token}
+async function syncReservationToRentman(id){
+  const db=requireRequestsDb(),row=await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();if(!row)throw Object.assign(new Error('Demande introuvable.'),{status:404});if(row.rentman_project_id)return {id:row.rentman_project_id,existing:true};
+  const created=projectRequestData(await writeRentman('/projects','POST',{name:row.name,reference:`WEB-LYON-${id}`}));const pid=Number(created.id);if(!pid)throw new Error("Rentman n'a pas retourné l'identifiant du projet.");
+  await db.prepare('UPDATE reservations SET rentman_project_id=?,updated_at=? WHERE id=?').bind(pid,new Date().toISOString(),id).run();return {id:pid,existing:false};
+}
+app.post('/api/magasin/requests/:id/rentman-sync',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),x=await syncReservationToRentman(id);await logActivity(id,magasinActor(req),'Synchronisation Rentman',`Projet #${x.id}`);res.json({ok:true,projectId:x.id})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.get('/api/magasin/pickup/:token',requireMagasin,async(req,res)=>{try{const row=await requireRequestsDb().prepare('SELECT id FROM reservations WHERE pickup_token=?').bind(String(req.params.token)).first();if(!row)return res.status(404).json({error:'QR de réservation invalide.'});res.json({id:row.id})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/clients',requireMagasin,async(req,res)=>{try{const email=lower(req.query.email);if(!safeEmail(email))return res.status(400).json({error:'E-mail invalide.'});const rows=await requireRequestsDb().prepare('SELECT * FROM reservations WHERE lower(email)=? ORDER BY id DESC').bind(email).all();res.json({items:(rows.results||[]).map(x=>reservationFromRow(x))})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/equipment/:id/alternatives',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),links=await requireRequestsDb().prepare('SELECT alternative_equipment_id AS id FROM equipment_alternatives WHERE equipment_id=?').bind(id).all(),equipment=await getEquipment(),by=new Map(equipment.map(x=>[Number(x.id),x]));res.json({items:(links.results||[]).map(x=>by.get(Number(x.id))).filter(Boolean)})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/equipment/:id/alternatives',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),alt=Number(req.body?.alternativeId);if(!id||!alt||id===alt)return res.status(400).json({error:'Alternative invalide.'});await requireRequestsDb().prepare('INSERT OR IGNORE INTO equipment_alternatives(equipment_id,alternative_equipment_id,created_by,created_at) VALUES(?,?,?,?)').bind(id,alt,req.magasinUser?.id||null,new Date().toISOString()).run();res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/equipment/:id/units',requireMagasin,async(req,res)=>{try{const x=await requireRequestsDb().prepare('SELECT * FROM equipment_units WHERE equipment_id=? ORDER BY label').bind(Number(req.params.id)).all();res.json({items:x.results||[]})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/equipment/:id/units',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),b=req.body||{},now=new Date().toISOString();if(!String(b.barcode||'').trim())return res.status(400).json({error:'Code-barres/QR obligatoire.'});const x=await requireRequestsDb().prepare('INSERT INTO equipment_units(equipment_id,label,barcode,serial_number,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?)').bind(id,String(b.label||'Unité'),String(b.barcode).trim(),String(b.serialNumber||''),String(b.notes||''),now,now).run();res.json({ok:true,id:x.meta?.last_row_id})}catch(e){res.status(409).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/scan',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),b=req.body||{},phase=String(b.phase||'prepare');if(!['prepare','checkout','return'].includes(phase))return res.status(400).json({error:'Phase invalide.'});const db=requireRequestsDb(),unit=await db.prepare('SELECT * FROM equipment_units WHERE barcode=?').bind(String(b.barcode||'').trim()).first();if(!unit)return res.status(404).json({error:'Unité inconnue. Ajoute-la d’abord au parc.'});const line=await db.prepare('SELECT * FROM reservation_items WHERE reservation_id=? AND equipment_id=?').bind(id,unit.equipment_id).first();if(!line)return res.status(409).json({error:"Cette unité ne correspond pas au matériel de la réservation."});const condition=['ok','damaged','missing','not_returned'].includes(b.condition)?b.condition:'ok',actor=magasinActor(req),now=new Date().toISOString();await db.prepare('INSERT INTO reservation_unit_events(reservation_id,unit_id,phase,condition_status,comment,photo_base64,actor,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,unit.id,phase,condition,String(b.comment||''),String(b.photo||''),actor,now).run();const unitStatus=phase==='return'?(condition==='ok'?'available':condition==='missing'||condition==='not_returned'?'missing':'maintenance'):phase==='checkout'?'out':'prepared';await db.prepare('UPDATE equipment_units SET status=?,updated_at=? WHERE id=?').bind(unitStatus,now,unit.id).run();if(condition!=='ok')await db.prepare('INSERT INTO reservation_incidents(reservation_id,equipment_id,unit_id,type,comment,photo_base64,actor,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,unit.equipment_id,unit.id,condition,String(b.comment||''),String(b.photo||''),actor,now).run();await logActivity(id,actor,`Scan ${phase}`,`${unit.label} · ${unit.barcode} · ${condition}`);res.json({ok:true,unit:{id:unit.id,label:unit.label,barcode:unit.barcode,status:unitStatus}})}catch(e){res.status(e.status||500).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/incidents',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),b=req.body||{},actor=magasinActor(req);await requireRequestsDb().prepare('INSERT INTO reservation_incidents(reservation_id,equipment_id,unit_id,type,comment,photo_base64,actor,created_at) VALUES(?,?,?,?,?,?,?,?)').bind(id,b.equipmentId||null,b.unitId||null,String(b.type||'damaged'),String(b.comment||''),String(b.photo||''),actor,new Date().toISOString()).run();await logActivity(id,actor,'Incident matériel',String(b.comment||b.type||''));res.json({ok:true})}catch(e){res.status(500).json({error:e.message})}});
+app.get('/api/magasin/reminders',requireMagasin,async(req,res)=>{try{const today=new Date().toISOString().slice(0,10),rows=await requireRequestsDb().prepare("SELECT * FROM reservations WHERE status='accepted' AND archived=0 AND fulfillment_status NOT IN ('returned','closed') AND date_to<=? ORDER BY date_to").bind(today).all();res.json({items:(rows.results||[]).map(x=>reservationFromRow(x))})}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/remind',requireMagasin,async(req,res)=>{try{const id=Number(req.params.id),db=requireRequestsDb(),row=await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();if(!row)return res.status(404).json({error:'Demande introuvable.'});const result=await sendReservationEmail(row,`Rappel retour matériel — demande #${id}`,mailHtml('Rappel de retour',`<p>Bonjour ${row.first_name},</p><p>Le matériel de la demande #${id} est attendu au magasin 3iS Lyon au plus tard le ${row.date_to}.</p>`));await db.prepare('UPDATE reservations SET last_reminder_at=? WHERE id=?').bind(new Date().toISOString(),id).run();await logActivity(id,magasinActor(req),'Rappel de retour envoyé');res.json({ok:true,...result})}catch(e){res.status(500).json({error:e.message})}});
 app.get('/api/magasin/dashboard', requireMagasin, async (req,res)=>{
   try {
     const db=requireRequestsDb(), rows=await db.prepare('SELECT * FROM reservations ORDER BY id DESC LIMIT 500').all(), items=(rows.results||[]).map(row=>reservationFromRow(row));
@@ -819,7 +886,11 @@ app.post('/api/magasin/requests/:id/status', requireMagasin, async (req, res) =>
     const labels = { pending:'remise en attente', accepted:'acceptée par le magasin', refused:'refusée par le magasin' };
     await db.prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
       .bind(id, 'staff', `Demande ${labels[status]}.`, now).run();
-    if (status === 'accepted') await db.prepare("UPDATE reservations SET fulfillment_status='accepted' WHERE id=?").bind(id).run();
+    if (status === 'accepted') {
+      await db.prepare("UPDATE reservations SET fulfillment_status='accepted' WHERE id=?").bind(id).run();
+      await ensurePickupToken(id);
+      try { const sync=await syncReservationToRentman(id); await logActivity(id,magasinActor(req),'Projet Rentman créé',`#${sync.id}`); } catch(syncErr) { await logActivity(id,magasinActor(req),'Synchronisation Rentman à reprendre',String(syncErr.message||syncErr)); }
+    }
     const row = await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();
     await logActivity(id, magasinActor(req), `Demande ${labels[status]}`);
     await sendReservationEmail(row, `Demande matériel #${id} — ${status === 'accepted' ? 'acceptée' : status === 'refused' ? 'refusée' : 'mise à jour'}`, mailHtml('Mise à jour de votre demande', `<p>Bonjour ${row?.first_name || ''},</p><p>Votre demande #${id} a été ${labels[status]}.</p>`));
@@ -902,9 +973,16 @@ app.get(['/api/equipment/:id/image', '/equipment/:id/image'], async (req, res) =
   }
 });
 
+async function processAutomaticReminders(){
+  const db=requireRequestsDb(),today=new Date().toISOString().slice(0,10),rows=await db.prepare("SELECT * FROM reservations WHERE status='accepted' AND archived=0 AND fulfillment_status NOT IN ('returned','closed') AND date_to<=?").bind(today).all();
+  let sent=0;for(const row of rows.results||[]){const last=String(row.last_reminder_at||'').slice(0,10);if(last===today)continue;const result=await sendReservationEmail(row,`Rappel retour matériel — demande #${row.id}`,mailHtml('Retour du matériel',`<p>Bonjour ${row.first_name},</p><p>Le matériel de votre demande #${row.id} est attendu au magasin 3iS Lyon depuis le ${row.date_to}.</p>`));if(result.sent){sent++;await db.prepare('UPDATE reservations SET last_reminder_at=? WHERE id=?').bind(new Date().toISOString(),row.id).run();}}
+  return {checked:(rows.results||[]).length,sent};
+}
+
 if (require.main === module) {
   app.listen(PORT, () => console.log(`3iS Store running on http://localhost:${PORT}`));
 }
 
 module.exports = app;
 module.exports.setWorkerEnv = setWorkerEnv;
+module.exports.processAutomaticReminders = processAutomaticReminders;
