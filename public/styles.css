@@ -224,3 +224,39 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
  #modal .equipment-reservation-list .reservation-order{grid-column:1/-1}
  .equipment-modal-footer{padding:12px 16px 16px}
 }
+
+/* V16.25 — alignement propre de la fiche équipement */
+#modal article{overflow:hidden}
+#modalBody{position:relative;padding-right:0}
+#modal .close{
+  position:absolute;
+  top:16px;
+  right:16px;
+  left:auto;
+  width:42px;
+  height:42px;
+  margin:0;
+  display:grid;
+  place-items:center;
+  border:1px solid rgba(255,255,255,.28);
+  border-radius:5px;
+  background:rgba(8,12,14,.88);
+  box-shadow:0 8px 24px rgba(0,0,0,.35);
+  backdrop-filter:blur(10px);
+}
+#modal .equipment-modal-content{padding:26px 32px 34px}
+#modal .equipment-reservations,
+#modal .equipment-reservation-list,
+#modal .equipment-reservation-list article{width:100%;max-width:100%;box-sizing:border-box}
+#modal .equipment-reservation-list{padding:0 1px 0 0}
+#modal .equipment-reservation-list article{
+  margin:0;
+  overflow:hidden;
+}
+#modal .equipment-reservations-head{margin-right:0}
+#modal .equipment-modal-footer{padding-left:32px;padding-right:32px}
+@media(max-width:800px){
+ #modal .close{top:12px;right:12px}
+ #modal .equipment-modal-content{padding:18px 16px 24px}
+ #modal .equipment-modal-footer{padding-left:16px;padding-right:16px}
+}
