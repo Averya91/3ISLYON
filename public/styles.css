@@ -60,3 +60,24 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
 .tracking-section:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(234,62,67,.08),transparent 45%);pointer-events:none}.tracking-section>*{position:relative;z-index:1}
 @media(max-width:850px){.hero{height:430px}.hero-campus-label{right:18px;bottom:42px}.campus-strip{grid-template-columns:1fr;padding:0 18px;margin-top:55px}.campus-strip-image{min-height:260px;border-radius:10px 10px 0 0}.campus-strip-copy{border-left:1px solid #293036;border-top:0;border-radius:0 0 10px 10px;padding:30px}.tracking-section{background-attachment:scroll}}
 @media(max-width:650px){.hero{height:410px}.hero-bg{background-position:58% center}.hero-campus-label{display:none}.campus-strip-image{min-height:220px}}
+
+
+/* V16.13 — suivi de réservation / chat */
+.tracking-section{padding:78px max(30px,calc((100vw - 1280px)/2));min-height:620px}
+.tracking-section .section-heading,.tracking-section>.tracking-intro,.tracking-section>.track-form,.tracking-section>#trackResult{max-width:1280px;margin-left:auto;margin-right:auto}
+.tracking-head{margin-top:36px;padding:22px 24px;background:rgba(12,17,20,.92);border:1px solid #2b3338;border-bottom:0;border-radius:10px 10px 0 0}
+.tracking-head h3{font:700 22px/1.2 'Josefin Sans';letter-spacing:-.01em}
+.tracking-head .eyebrow{margin-bottom:8px}.pending{border:1px solid currentColor;border-radius:4px;font:700 9px 'Josefin Sans';letter-spacing:.07em}
+.track-meta{margin:0;padding:0 24px 22px;background:rgba(12,17,20,.92);border-left:1px solid #2b3338;border-right:1px solid #2b3338;display:flex;align-items:center;gap:10px 28px;color:#8e989f}
+.track-meta b{color:#fff}.track-meta span{font-size:13px}
+.tracking-section .chat-shell{border-radius:0 0 10px 10px;border-color:#2b3338;background:rgba(7,11,14,.94);box-shadow:0 24px 70px rgba(0,0,0,.32)}
+.tracking-section .chat-shell .messages{min-height:260px;max-height:430px;padding:26px 24px;gap:12px}
+.tracking-section .msg{width:fit-content;max-width:min(72%,620px);padding:11px 15px;border:1px solid #30383d;border-radius:10px 10px 10px 3px;background:#1b2327;box-shadow:0 7px 20px rgba(0,0,0,.16);line-height:1.45}
+.tracking-section .msg.staff{align-self:flex-start;border-left:3px solid var(--red)}
+.tracking-section .msg.user{align-self:flex-end;border-color:rgba(234,62,67,.25);border-left:1px solid rgba(234,62,67,.25);border-radius:10px 10px 3px 10px;background:rgba(234,62,67,.13)}
+.tracking-section .typing-slot{min-height:38px;padding:0 24px}
+.tracking-section .message-form{grid-template-columns:minmax(0,1fr) 140px;max-width:none;padding:12px;background:#0d1316;border-top:1px solid #273035}
+.tracking-section .message-form input{height:52px;margin:0;padding:0 16px;background:#141b1f;border:1px solid #30393e;border-radius:5px;color:#fff;outline:none}
+.tracking-section .message-form input:focus{border-color:#59646b;box-shadow:0 0 0 3px rgba(255,255,255,.025)}
+.tracking-section .message-form button{border-radius:5px}
+@media(max-width:650px){.tracking-section{padding:55px 18px}.tracking-head{padding:18px;align-items:flex-start;flex-direction:column}.track-meta{padding:0 18px 18px;flex-direction:column;align-items:flex-start;gap:5px}.tracking-section .chat-shell .messages{padding:18px 14px;min-height:220px}.tracking-section .msg{max-width:88%}.tracking-section .message-form{grid-template-columns:1fr;padding:10px}.tracking-section .message-form button{min-height:48px}.tracking-section .typing-slot{padding:0 14px}}
