@@ -111,3 +111,18 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
   margin-left:0;
   margin-right:auto;
 }
+
+
+/* V16.16 — box chat plus compacte */
+.tracking-section .chat-shell .messages{
+  min-height:150px;
+  max-height:280px;
+  padding:18px 20px;
+}
+.tracking-section .typing-slot{min-height:30px;padding:0 20px}
+.tracking-section .message-form{padding:9px 10px}
+.tracking-section .message-form input{height:46px}
+@media(max-width:650px){
+  .tracking-section .chat-shell .messages{min-height:140px;max-height:250px;padding:15px 14px}
+  .tracking-section .typing-slot{min-height:28px;padding:0 14px}
+}
