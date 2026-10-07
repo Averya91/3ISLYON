@@ -534,3 +534,12 @@ html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head p:not(
 html[data-theme="dark"] body.magasin-page #accountsView>.calendar-head p:not(.eyebrow){color:#89969e!important}
 html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-reservation{background:transparent!important}
 html[data-theme="dark"] body.magasin-page #preparationView>.calendar-head .scan-reservation input{background:#0b1013!important;color:#e9edef!important;border-color:#344048!important}
+
+
+/* V19.5 — equipment accordion navigation */
+#equipmentSubnav{display:none!important}
+#equipmentSubnav.open{display:flex!important}
+#equipmentNav .nav-chevron{margin-left:auto;transition:transform .18s ease}
+#equipmentNav.expanded .nav-chevron{transform:rotate(180deg)}
+#equipmentSubnav.open{animation:equipmentMenuIn .16s ease both}
+@keyframes equipmentMenuIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
