@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS reservations (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   archived INTEGER NOT NULL DEFAULT 0,
-  fulfillment_status TEXT NOT NULL DEFAULT ''
+  fulfillment_status TEXT NOT NULL DEFAULT '',
+  account_manager TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_reservations_email ON reservations(email);
 CREATE INDEX IF NOT EXISTS idx_reservations_status ON reservations(status);

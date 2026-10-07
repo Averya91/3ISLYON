@@ -588,6 +588,7 @@ function reservationFromRow(row, messages = []) {
     person: [row.first_name, row.last_name].filter(Boolean).join(' '),
     firstName: row.first_name, lastName: row.last_name, email: row.email,
     createdAt: row.created_at, updatedAt: row.updated_at,
+    accountManager: row.account_manager || '',
     messages
   };
 }
@@ -713,7 +714,13 @@ app.get('/api/magasin/requests/:id/presence', requireMagasin, async (req, res) =
 
 
 async function logActivity(id, actor, action, details = '') {
-  try { await requireRequestsDb().prepare('INSERT INTO reservation_activity (reservation_id, actor, action, details, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, actor, action, details, new Date().toISOString()).run(); } catch (_) {}
+  try {
+    const db = requireRequestsDb(), now = new Date().toISOString();
+    await db.prepare('INSERT INTO reservation_activity (reservation_id, actor, action, details, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, actor, action, details, now).run();
+    if (actor && actor !== 'Magasin' && actor !== 'Réservant') {
+      await db.prepare('UPDATE reservations SET account_manager = ?, updated_at = ? WHERE id = ?').bind(actor, now, id).run();
+    }
+  } catch (_) {}
 }
 function mailHtml(title, body) { return `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2 style="color:#ea3e43">${title}</h2><div style="line-height:1.6;color:#222">${body}</div><p style="color:#777;font-size:12px">3iS Lyon · Magasin audiovisuel</p></div>`; }
 async function sendReservationEmail(row, subject, html) {
