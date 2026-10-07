@@ -126,3 +126,24 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
   .tracking-section .chat-shell .messages{min-height:140px;max-height:250px;padding:15px 14px}
   .tracking-section .typing-slot{min-height:28px;padding:0 14px}
 }
+
+
+/* V16.17 — hauteur restaurée, chat moins large */
+.tracking-section>#trackResult{
+  width:min(100%,1000px);
+  margin-left:auto;
+  margin-right:auto;
+}
+.tracking-section .chat-shell .messages{
+  min-height:260px;
+  max-height:430px;
+  padding:26px 24px;
+}
+.tracking-section .typing-slot{min-height:38px;padding:0 24px}
+.tracking-section .message-form{padding:12px}
+.tracking-section .message-form input{height:52px}
+@media(max-width:650px){
+  .tracking-section>#trackResult{width:100%}
+  .tracking-section .chat-shell .messages{min-height:220px;max-height:340px;padding:18px 14px}
+  .tracking-section .typing-slot{min-height:31px;padding:0 14px}
+}
