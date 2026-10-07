@@ -93,3 +93,21 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
   .tracking-section .msg{max-width:58%;min-width:44px}
   .tracking-section .msg.user{max-width:58%}
 }
+
+
+/* V16.15 — le fil de discussion utilise enfin 100% de la largeur */
+.tracking-section .chat-shell .messages{
+  width:100%;
+  max-width:none;
+  box-sizing:border-box;
+}
+.tracking-section .chat-shell .msg.user{
+  align-self:flex-end;
+  margin-left:auto;
+  margin-right:0;
+}
+.tracking-section .chat-shell .msg.staff{
+  align-self:flex-start;
+  margin-left:0;
+  margin-right:auto;
+}
