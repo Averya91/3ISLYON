@@ -698,3 +698,9 @@ button:active,.page-btn:active,.icon-action:active{transform:scale(.975)}
 @keyframes portalRingUnlock{0%{transform:scale(1);opacity:1}55%{transform:scale(1.5);opacity:1;border-color:#66dfa0}100%{transform:scale(3.4);opacity:0}}
 @keyframes portalDenied{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}.motion-reveal,.motion-reveal.motion-visible{opacity:1!important;transform:none!important}*,*:before,*:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+
+
+/* V20.0.2 — badge notifications */
+.icon-action #notificationCount{display:none!important;right:-7px!important;top:-7px!important;min-width:19px!important;height:19px!important;padding:0 5px!important;border-radius:999px!important;background:#ea3e43!important;color:#fff!important;font:700 9px/19px 'Josefin Sans'!important;letter-spacing:-.02em;text-align:center;box-shadow:0 0 0 2px var(--mag-bg,#090d10),0 3px 10px rgba(234,62,67,.32)}
+.icon-action #notificationCount.has-notifications{display:block!important;animation:notificationBadgeIn .28s var(--motion-ease,cubic-bezier(.2,.8,.2,1)) both}
+@keyframes notificationBadgeIn{from{opacity:0;transform:scale(.45)}to{opacity:1;transform:scale(1)}}
