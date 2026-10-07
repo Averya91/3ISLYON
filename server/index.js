@@ -749,6 +749,10 @@ app.post('/api/magasin/requests/:id/status', requireMagasin, async (req, res) =>
     const labels = { pending:'remise en attente', accepted:'acceptée par le magasin', refused:'refusée par le magasin' };
     await db.prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
       .bind(id, 'staff', `Demande ${labels[status]}.`, now).run();
+    if (status === 'accepted') await db.prepare("UPDATE reservations SET fulfillment_status='accepted' WHERE id=?").bind(id).run();
+    const row = await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();
+    await logActivity(id, 'Magasin', `Demande ${labels[status]}`);
+    await sendReservationEmail(row, `Demande matériel #${id} — ${status === 'accepted' ? 'acceptée' : status === 'refused' ? 'refusée' : 'mise à jour'}`, mailHtml('Mise à jour de votre demande', `<p>Bonjour ${row?.first_name || ''},</p><p>Votre demande #${id} a été ${labels[status]}.</p>`));
     res.json({ ok: true, status });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
