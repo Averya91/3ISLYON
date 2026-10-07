@@ -81,3 +81,15 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
 .tracking-section .message-form input:focus{border-color:#59646b;box-shadow:0 0 0 3px rgba(255,255,255,.025)}
 .tracking-section .message-form button{border-radius:5px}
 @media(max-width:650px){.tracking-section{padding:55px 18px}.tracking-head{padding:18px;align-items:flex-start;flex-direction:column}.track-meta{padding:0 18px 18px;flex-direction:column;align-items:flex-start;gap:5px}.tracking-section .chat-shell .messages{padding:18px 14px;min-height:220px}.tracking-section .msg{max-width:88%}.tracking-section .message-form{grid-template-columns:1fr;padding:10px}.tracking-section .message-form button{min-height:48px}.tracking-section .typing-slot{padding:0 14px}}
+
+
+/* V16.14 — conversation centrée, suppression du vide latéral */
+.tracking-section .chat-shell .messages{align-items:stretch}
+.tracking-section .msg{width:auto;max-width:68%;align-self:flex-start}
+.tracking-section .msg.user{align-self:flex-end;margin-left:auto}
+.tracking-section .msg.staff{margin-right:auto}
+.tracking-section .chat-shell .messages:has(.msg){display:flex}
+@media(min-width:851px){
+  .tracking-section .msg{max-width:58%;min-width:44px}
+  .tracking-section .msg.user{max-width:58%}
+}
