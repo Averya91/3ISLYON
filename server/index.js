@@ -544,6 +544,7 @@ function requireMagasin(req, res, next) {
 function reservationFromRow(row, messages = []) {
   return {
     id: row.id, name: row.name, role: row.role, status: row.status,
+    archived: Boolean(row.archived), fulfillmentStatus: row.fulfillment_status || (row.status === 'accepted' ? 'accepted' : ''),
     from: row.date_from, to: row.date_to, reason: row.reason,
     track: row.track || '', year: row.year || '', course: row.course || '',
     personalUse: Boolean(row.personal_use),
@@ -557,9 +558,14 @@ async function loadLocalReservation(id) {
   const db = requireRequestsDb();
   const row = await db.prepare('SELECT * FROM reservations WHERE id = ?').bind(id).first();
   if (!row) return null;
-  const equipment = await db.prepare('SELECT equipment_id AS equipmentId, name, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY id').bind(id).all();
+  const equipmentRows = await db.prepare('SELECT equipment_id AS equipmentId, name, quantity FROM reservation_items WHERE reservation_id = ? ORDER BY id').bind(id).all();
   const messages = await db.prepare('SELECT id, author, message, created_at AS createdAt FROM reservation_messages WHERE reservation_id = ? ORDER BY id').bind(id).all();
-  return { reservation: reservationFromRow(row, messages.results || []), equipment: equipment.results || [] };
+  const attachments = await db.prepare('SELECT id, name, mime_type AS type, size, author, created_at AS createdAt FROM reservation_attachments WHERE reservation_id = ? ORDER BY id').bind(id).all();
+  const activity = await db.prepare('SELECT id, actor, action, details, created_at AS createdAt FROM reservation_activity WHERE reservation_id = ? ORDER BY id DESC LIMIT 100').bind(id).all();
+  let priceMap = new Map();
+  try { priceMap = new Map((await getEquipment()).map(x => [Number(x.id), Number(x.rentalPrice) || 0])); } catch (_) {}
+  const equipment = (equipmentRows.results || []).map(x => ({ ...x, unitPrice: priceMap.get(Number(x.equipmentId)) || 0 }));
+  return { reservation: reservationFromRow(row, messages.results || []), equipment, attachments: attachments.results || [], activity: activity.results || [] };
 }
 
 app.post('/api/reservations', async (req, res) => {
@@ -668,6 +674,52 @@ app.get('/api/magasin/requests/:id/presence', requireMagasin, async (req, res) =
   res.json({ otherTyping: isTyping(id, 'user') });
 });
 
+
+async function logActivity(id, actor, action, details = '') {
+  try { await requireRequestsDb().prepare('INSERT INTO reservation_activity (reservation_id, actor, action, details, created_at) VALUES (?, ?, ?, ?, ?)').bind(id, actor, action, details, new Date().toISOString()).run(); } catch (_) {}
+}
+function mailHtml(title, body) { return `<div style="font-family:Arial,sans-serif;max-width:620px;margin:auto"><h2 style="color:#ea3e43">${title}</h2><div style="line-height:1.6;color:#222">${body}</div><p style="color:#777;font-size:12px">3iS Lyon · Magasin audiovisuel</p></div>`; }
+async function sendReservationEmail(row, subject, html) {
+  const apiKey = config('RESEND_API_KEY'), from = config('MAIL_FROM');
+  if (!apiKey || !from || !row?.email) return { sent:false, reason:'not_configured' };
+  try {
+    const r = await fetch('https://api.resend.com/emails', { method:'POST', headers:{ Authorization:`Bearer ${apiKey}`, 'Content-Type':'application/json' }, body:JSON.stringify({ from, to:[row.email], subject, html }) });
+    if (!r.ok) throw new Error((await r.text()).slice(0,300));
+    return { sent:true };
+  } catch (e) { return { sent:false, reason:e.message }; }
+}
+async function checkReservationStock(id) {
+  const data = await loadLocalReservation(id);
+  if (!data) return null;
+  const from = new Date(`${data.reservation.from}T00:00:00`), to = new Date(`${data.reservation.to}T23:59:59.999`);
+  const equipment = await getEquipment(), byId = new Map(equipment.map(x=>[Number(x.id),x]));
+  const groups = await all('/projectequipmentgroup',{sort:'+id',fields:'id,planperiod_start,planperiod_end,usageperiod_start,usageperiod_end'},{cacheMs:AVAILABILITY_CACHE_MS});
+  const relevant = groups.filter(g=>{const a=new Date(g.planperiod_start||g.usageperiod_start||''),b=new Date(g.planperiod_end||g.usageperiod_end||'');return !Number.isNaN(a.valueOf())&&!Number.isNaN(b.valueOf())&&overlap(a,b,from,to)});
+  const selected = relevant.slice(0,20), deductions = new Map();
+  const rows = await Promise.all(selected.map(async g => {
+    try { return await all(`/projectequipmentgroup/${g.id}/projectequipment`,{sort:'+id',fields:'id,equipment,linked_equipment,quantity,is_option,warehouse_reservations'},{cacheMs:AVAILABILITY_CACHE_MS}); } catch (_) { return []; }
+  }));
+  for (const p of rows.flat()) { if(p.is_option===true)continue;const eid=refId(p.equipment||p.linked_equipment),q=Math.max(0,number(p.warehouse_reservations,0));if(eid&&q)deductions.set(eid,(deductions.get(eid)||0)+q); }
+  const items = data.equipment.map(line=>{const e=byId.get(Number(line.equipmentId)),available=e?.stockKnown?Math.max(0,e.currentStock-(deductions.get(Number(line.equipmentId))||0)):null;return {equipmentId:line.equipmentId,name:line.name,requested:Number(line.quantity),available,ok:available===null||available>=Number(line.quantity)}});
+  return { ok:items.every(x=>x.ok), complete:relevant.length<=20, items };
+}
+app.get('/api/magasin/dashboard', requireMagasin, async (req,res)=>{
+  try {
+    const db=requireRequestsDb(), rows=await db.prepare('SELECT * FROM reservations ORDER BY id DESC LIMIT 500').all(), items=(rows.results||[]).map(row=>reservationFromRow(row));
+    const today=new Date().toISOString().slice(0,10), active=items.filter(x=>!x.archived);
+    const stats={pending:active.filter(x=>x.status==='pending').length,preparing:active.filter(x=>x.fulfillmentStatus==='preparing').length,ready:active.filter(x=>x.fulfillmentStatus==='ready').length,pickupsToday:active.filter(x=>x.status==='accepted'&&x.from===today).length,returnsToday:active.filter(x=>x.status==='accepted'&&x.to===today).length,overdue:active.filter(x=>x.status==='accepted'&&x.to<today&&!['returned','closed'].includes(x.fulfillmentStatus)).length};
+    res.json({stats,items});
+  } catch(e){res.status(e.status||502).json({error:e.message})}
+});
+app.get('/api/magasin/requests/:id/stock-check', requireMagasin, async(req,res)=>{try{const x=await checkReservationStock(Number(req.params.id));if(!x)return res.status(404).json({error:'Demande introuvable.'});res.json(x)}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/archive', requireMagasin, async(req,res)=>{try{const id=Number(req.params.id),archived=req.body?.archived?1:0,db=requireRequestsDb(),now=new Date().toISOString();const r=await db.prepare('UPDATE reservations SET archived=?, updated_at=? WHERE id=?').bind(archived,now,id).run();if(!r.meta?.changes)return res.status(404).json({error:'Demande introuvable.'});await logActivity(id,'Magasin',archived?'Demande archivée':'Demande désarchivée');res.json({ok:true,archived:Boolean(archived)})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/workflow', requireMagasin, async(req,res)=>{try{const id=Number(req.params.id),status=String(req.body?.status||'');if(!['preparing','ready','collected','returned','closed'].includes(status))return res.status(400).json({error:'Étape invalide.'});const db=requireRequestsDb(),now=new Date().toISOString(),row=await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();if(!row)return res.status(404).json({error:'Demande introuvable.'});if(row.status!=='accepted')return res.status(409).json({error:"La demande doit d'abord être acceptée."});await db.prepare('UPDATE reservations SET fulfillment_status=?, updated_at=? WHERE id=?').bind(status,now,id).run();const names={preparing:'à préparer',ready:'prête au retrait',collected:'retirée',returned:'retournée',closed:'clôturée'};await db.prepare('INSERT INTO reservation_messages (reservation_id,author,message,created_at) VALUES (?,?,?,?)').bind(id,'staff',`Demande ${names[status]}.`,now).run();await logActivity(id,'Magasin',`Étape : ${names[status]}`);if(status==='ready')await sendReservationEmail(row,'Votre matériel 3iS Lyon est prêt',mailHtml('Matériel prêt',`<p>Bonjour ${row.first_name},</p><p>Votre demande #${id} est prête au retrait au magasin.</p>`));res.json({ok:true,status})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.put('/api/magasin/requests/:id/items', requireMagasin, async(req,res)=>{try{const id=Number(req.params.id),items=Array.isArray(req.body?.items)?req.body.items:[];if(!items.length)return res.status(400).json({error:'Aucun matériel.'});const db=requireRequestsDb(),existing=await db.prepare('SELECT equipment_id AS equipmentId,name FROM reservation_items WHERE reservation_id=?').bind(id).all(),names=new Map((existing.results||[]).map(x=>[Number(x.equipmentId),x.name]));await db.prepare('DELETE FROM reservation_items WHERE reservation_id=?').bind(id).run();await db.batch(items.map(x=>db.prepare('INSERT INTO reservation_items (reservation_id,equipment_id,name,quantity) VALUES (?,?,?,?)').bind(id,Number(x.equipmentId),names.get(Number(x.equipmentId))||`Équipement ${x.equipmentId}`,Math.max(1,Number(x.quantity)||1))));await logActivity(id,'Magasin','Matériel de la demande modifié',items.map(x=>`#${x.equipmentId} ×${x.quantity}`).join(', '));res.json({ok:true})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/attachments', requireMagasin, async(req,res)=>{try{const id=Number(req.params.id),name=String(req.body?.name||'fichier').slice(0,180),type=String(req.body?.type||'application/octet-stream').slice(0,100),data=String(req.body?.data||'');if(!data||data.length>850000)return res.status(400).json({error:'Fichier invalide ou trop volumineux (600 Ko max).'});const size=Math.floor(data.length*0.75),db=requireRequestsDb();await db.prepare('INSERT INTO reservation_attachments (reservation_id,author,name,mime_type,size,data_base64,created_at) VALUES (?,?,?,?,?,?,?)').bind(id,'staff',name,type,size,data,new Date().toISOString()).run();await logActivity(id,'Magasin','Pièce jointe ajoutée',name);res.json({ok:true})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.get('/api/magasin/attachments/:id', requireMagasin, async(req,res)=>{try{const row=await requireRequestsDb().prepare('SELECT * FROM reservation_attachments WHERE id=?').bind(Number(req.params.id)).first();if(!row)return res.status(404).end();const bytes=Uint8Array.from(atob(row.data_base64),c=>c.charCodeAt(0));res.set('Content-Type',row.mime_type||'application/octet-stream');res.set('Content-Disposition',`attachment; filename="${String(row.name).replace(/"/g,'')}"`);res.send(bytes)}catch(e){res.status(500).json({error:e.message})}});
+app.post('/api/reservations/:id/attachments', async(req,res)=>{try{const id=Number(req.params.id),email=lower(req.body?.email),name=String(req.body?.name||'fichier').slice(0,180),type=String(req.body?.type||'application/octet-stream').slice(0,100),data=String(req.body?.data||'');const found=await loadLocalReservation(id);if(!found||lower(found.reservation.email)!==email)return res.status(403).json({error:'Accès refusé.'});if(!data||data.length>850000)return res.status(400).json({error:'Fichier invalide ou trop volumineux (600 Ko max).'});await requireRequestsDb().prepare('INSERT INTO reservation_attachments (reservation_id,author,name,mime_type,size,data_base64,created_at) VALUES (?,?,?,?,?,?,?)').bind(id,'user',name,type,Math.floor(data.length*.75),data,new Date().toISOString()).run();await logActivity(id,'Réservant','Pièce jointe ajoutée',name);res.json({ok:true})}catch(e){res.status(e.status||502).json({error:e.message})}});
+app.post('/api/magasin/requests/:id/document', requireMagasin, async(req,res)=>{try{const id=Number(req.params.id),type=String(req.body?.type||'');if(!['devis','facture'].includes(type))return res.status(400).json({error:'Document invalide.'});const total=Math.max(0,Number(req.body?.total)||0);await requireRequestsDb().prepare('INSERT INTO reservation_documents (reservation_id,type,total,created_at) VALUES (?,?,?,?)').bind(id,type,total,new Date().toISOString()).run();await logActivity(id,'Magasin',type==='devis'?'Devis généré':'Facture générée',`Total : ${total.toFixed(2)} €`);res.json({ok:true})}catch(e){res.status(e.status||502).json({error:e.message})}});
+
 app.get('/api/magasin/requests', requireMagasin, async (req, res) => {
   try {
     const status = String(req.query.status || 'all');
@@ -690,6 +742,7 @@ app.post('/api/magasin/requests/:id/status', requireMagasin, async (req, res) =>
   try {
     const id = Number(req.params.id), status = String(req.body?.status || '');
     if (!['pending','accepted','refused'].includes(status)) return res.status(400).json({ error: 'Statut invalide.' });
+    if (status === 'accepted') { const stock = await checkReservationStock(id); if (stock && !stock.ok) return res.status(409).json({ error: 'Stock insuffisant pour accepter cette demande.', stock }); }
     const db = requireRequestsDb(), now = new Date().toISOString();
     const result = await db.prepare('UPDATE reservations SET status = ?, updated_at = ? WHERE id = ?').bind(status, now, id).run();
     if (!result.meta?.changes) return res.status(404).json({ error: 'Demande introuvable.' });
@@ -712,6 +765,9 @@ app.delete('/api/magasin/requests/:id', requireMagasin, async (req, res) => {
     await db.batch([
       db.prepare('DELETE FROM reservation_messages WHERE reservation_id = ?').bind(id),
       db.prepare('DELETE FROM reservation_items WHERE reservation_id = ?').bind(id),
+      db.prepare('DELETE FROM reservation_attachments WHERE reservation_id = ?').bind(id),
+      db.prepare('DELETE FROM reservation_activity WHERE reservation_id = ?').bind(id),
+      db.prepare('DELETE FROM reservation_documents WHERE reservation_id = ?').bind(id),
       db.prepare('DELETE FROM reservations WHERE id = ?').bind(id)
     ]);
     setTyping(id, 'staff', false);
@@ -730,6 +786,9 @@ app.post('/api/magasin/requests/:id/message', requireMagasin, async (req, res) =
     if (!exists) return res.status(404).json({ error: 'Demande introuvable.' });
     await db.prepare('INSERT INTO reservation_messages (reservation_id, author, message, created_at) VALUES (?, ?, ?, ?)')
       .bind(id, 'staff', message, new Date().toISOString()).run();
+    const row = await db.prepare('SELECT * FROM reservations WHERE id=?').bind(id).first();
+    await logActivity(id, 'Magasin', 'Message envoyé', message.slice(0,120));
+    await sendReservationEmail(row, `Nouveau message du magasin — demande #${id}`, mailHtml('Nouveau message du magasin', `<p>${message.replace(/[&<>]/g,'')}</p><p>Consultez votre demande sur le catalogue 3iS Lyon pour répondre.</p>`));
     res.json({ ok: true });
   } catch (e) { res.status(e.status || 502).json({ error: e.message }); }
 });
