@@ -93,3 +93,13 @@ CREATE TABLE IF NOT EXISTS equipment_units (id INTEGER PRIMARY KEY AUTOINCREMENT
 CREATE TABLE IF NOT EXISTS reservation_unit_events (id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id INTEGER NOT NULL,unit_id INTEGER NOT NULL,phase TEXT NOT NULL,condition_status TEXT NOT NULL DEFAULT 'ok',comment TEXT NOT NULL DEFAULT '',photo_base64 TEXT NOT NULL DEFAULT '',actor TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS reservation_incidents (id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id INTEGER NOT NULL,equipment_id INTEGER,unit_id INTEGER,type TEXT NOT NULL,comment TEXT NOT NULL DEFAULT '',photo_base64 TEXT NOT NULL DEFAULT '',actor TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS reservation_document_files (id INTEGER PRIMARY KEY AUTOINCREMENT,reservation_id INTEGER NOT NULL,type TEXT NOT NULL,name TEXT NOT NULL,mime_type TEXT NOT NULL,data_base64 TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL);
+
+
+CREATE TABLE IF NOT EXISTS reservation_internal_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  reservation_id INTEGER NOT NULL,
+  author TEXT NOT NULL,
+  note TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_reservation_internal_notes_request ON reservation_internal_notes(reservation_id);
