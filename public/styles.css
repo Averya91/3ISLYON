@@ -147,3 +147,21 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
   .tracking-section .chat-shell .messages{min-height:220px;max-height:340px;padding:18px 14px}
   .tracking-section .typing-slot{min-height:31px;padding:0 14px}
 }
+
+
+/* V16.18 — centre tout le bloc de suivi, chat inchangé */
+.tracking-section .section-heading,
+.tracking-section>.tracking-intro,
+.tracking-section>.track-form{
+  width:min(100%,1000px);
+  max-width:1000px;
+  margin-left:auto;
+  margin-right:auto;
+}
+.tracking-section>.track-form{grid-template-columns:180px minmax(240px,1fr) 160px}
+@media(max-width:850px){
+  .tracking-section .section-heading,
+  .tracking-section>.tracking-intro,
+  .tracking-section>.track-form{width:100%;max-width:none}
+  .tracking-section>.track-form{grid-template-columns:1fr}
+}
