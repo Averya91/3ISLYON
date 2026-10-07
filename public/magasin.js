@@ -90,3 +90,7 @@ if(token)showAdmin();
 (function(){const btn=document.getElementById('themeToggle'),icon=document.getElementById('themeIcon'),meta=document.querySelector('meta[name="theme-color"]');function apply(t){document.documentElement.dataset.theme=t;try{localStorage.setItem('magasin-theme',t)}catch(e){}if(icon)icon.textContent=t==='dark'?'☀':'☾';if(btn)btn.title=t==='dark'?'Passer en mode clair':'Passer en mode sombre';if(meta)meta.content=t==='dark'?'#090d10':'#f3f5f7'}apply(document.documentElement.dataset.theme||'dark');if(btn)btn.onclick=()=>apply(document.documentElement.dataset.theme==='dark'?'light':'dark')})();
 
 $('#accountShortcut')?.addEventListener('click',()=>document.querySelector('[data-view="accounts"]')?.click());
+
+
+/* V20 — magasin motion */
+(()=>{document.body.classList.add('motion-ready');if(matchMedia('(prefers-reduced-motion: reduce)').matches)return;const reveal=()=>{const els=[...document.querySelectorAll('.dashboard-stat,.home-action-card,.request-card,.calendar-shell,.park-table')].filter(x=>!x.dataset.motionBound);els.forEach(x=>{x.dataset.motionBound='1';x.classList.add('motion-reveal');requestAnimationFrame(()=>requestAnimationFrame(()=>x.classList.add('motion-visible')))})};new MutationObserver(()=>requestAnimationFrame(reveal)).observe(document.body,{childList:true,subtree:true});reveal()})();
