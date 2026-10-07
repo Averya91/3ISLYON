@@ -385,3 +385,53 @@ button,.card,.cart-btn,.reserve-mini,.primary-wide,.page-btn,input,textarea{tran
 .equipment-context-bar{min-height:42px!important;padding:0 14px!important;background:#11171b!important;border-color:#293239!important}.equipment-context-bar>div:first-child{display:flex;align-items:baseline;gap:10px}.equipment-context-bar strong{color:#e6e9eb!important}.equipment-context-bar span{color:#77838b!important}.equipment-table-labels{margin-left:auto;display:grid;grid-template-columns:90px 90px 90px 90px;gap:12px}.equipment-table-labels span{text-align:center;font:700 7px 'Josefin Sans';color:#5f6c74!important}.park-table{background:#11171b!important;border-color:#293239!important;border-radius:0 0 11px 11px!important}.v19-equipment-row{grid-template-columns:minmax(310px,2fr) repeat(4,90px) 20px!important;min-height:62px;padding:8px 14px!important;border-color:#242d33!important;background:#11171b!important}.v19-equipment-row:hover{background:#172026!important}.equipment-main{display:flex!important;flex-direction:row!important;align-items:center;gap:11px}.equipment-main>div{display:flex;flex-direction:column}.equipment-state{flex:0 0 8px;width:8px;height:8px;border-radius:50%;background:#3fb96b;box-shadow:0 0 9px #3fb96b44}.equipment-state.low{background:#e9a638}.equipment-state.unavailable{background:#ed4852}.equipment-state.maintenance{background:#7a66df}.v19-equipment-row>span{text-align:center!important}.v19-equipment-row>span strong{color:#eef1f2!important;font-size:13px!important}.v19-equipment-row>span small{display:block;margin-top:2px;color:#68757d;font-size:7px}.v19-equipment-row>i{color:#5f6c74!important;background:transparent!important;font-size:18px!important}
 @media(max-width:1200px){.home-actions{grid-template-columns:repeat(2,1fr)}.equipment-filterbar{grid-template-columns:1fr 1fr 1fr}.equipment-table-labels{display:none}.v19-equipment-row{grid-template-columns:minmax(260px,2fr) repeat(2,80px) 20px!important}.v19-equipment-row>span:nth-of-type(n+3){display:none}}
 @media(max-width:700px){.home-hero{align-items:flex-start;flex-direction:column;gap:18px}.home-actions{grid-template-columns:1fr}.equipment-filterbar{grid-template-columns:1fr}.module-intro{align-items:flex-start;flex-direction:column;gap:12px}.v19-equipment-row{grid-template-columns:1fr 70px 18px!important}.v19-equipment-row>span:nth-of-type(n+2){display:none}}
+
+
+/* V19.1 — coherent dark/light themes */
+html[data-theme="dark"] .magasin-page{color-scheme:dark}
+html[data-theme="dark"] .month-calendar,
+html[data-theme="dark"] .calendar-toolbar,
+html[data-theme="dark"] .calendar-weekdays,
+html[data-theme="dark"] .calendar-grid,
+html[data-theme="dark"] .calendar-day,
+html[data-theme="dark"] .dashboard-stats>div,
+html[data-theme="dark"] .request-card,
+html[data-theme="dark"] .magasin-filters,
+html[data-theme="dark"] .calendar-modes,
+html[data-theme="dark"] .calendar-arrows button,
+html[data-theme="dark"] .calendar-controls>.page-btn{background:#11171b!important;color:#edf0f2!important;border-color:#293239!important}
+html[data-theme="dark"] .calendar-day.other-month{background:#0d1215!important;color:#59666f!important}
+html[data-theme="dark"] .calendar-day:hover{background:#172026!important}
+html[data-theme="dark"] .calendar-weekdays span{color:#77838b!important}
+html[data-theme="dark"] .calendar-event{background:#1c252b!important;border-color:#354149!important;color:#eef1f2!important}
+html[data-theme="dark"] .dashboard-stats>div strong,
+html[data-theme="dark"] .calendar-toolbar h2{color:#eef1f2!important}
+html[data-theme="dark"] .calendar-modes button{color:#87939b!important}
+html[data-theme="dark"] .calendar-modes button.active{background:#edf0f2!important;color:#11171b!important}
+html[data-theme="dark"] input,html[data-theme="dark"] select,html[data-theme="dark"] textarea{color-scheme:dark}
+.theme-toggle{font-size:15px!important;transition:.2s transform,.2s background}.theme-toggle:hover{transform:rotate(8deg)}
+html[data-theme="light"] .magasin-page{--v19-bg:#f3f5f7;--v19-side:#fff;--v19-panel:#fff;--v19-soft:#edf1f3;--v19-line:#d8dfe4;--v19-text:#172027;--v19-muted:#66747d;background:#f3f5f7!important;color:#172027!important;color-scheme:light}
+html[data-theme="light"] .magasin-appbar{background:#fff!important;border-color:#dce2e6!important}
+html[data-theme="light"] .magasin-app-brand,html[data-theme="light"] .magasin-heading h1{color:#172027!important}
+html[data-theme="light"] .magasin-app-search button,html[data-theme="light"] .icon-action{background:#f3f5f7!important;border-color:#d9e0e4!important;color:#4e5b64!important}
+html[data-theme="light"] .magasin-sidebar{background:#fff!important;box-shadow:inset -1px 0 #dce2e6!important}
+html[data-theme="light"] .sidebar-welcome{background:#f1f4f6}
+html[data-theme="light"] .sidebar-welcome b,html[data-theme="light"] .magasin-view-switch>button,html[data-theme="light"] .sidebar-bottom a{color:#34414a!important}
+html[data-theme="light"] .magasin-view-switch>button.active,html[data-theme="light"] .nav-group>button.active{background:#f2e9ea!important;color:#151d22!important}
+html[data-theme="light"] .magasin-workspace{background:radial-gradient(circle at 72% -15%,#e8eef1 0,transparent 30%),#f3f5f7!important}
+html[data-theme="light"] .home-hero{background:linear-gradient(115deg,#fff,#f7f9fa 58%,#fff5f5);border-color:#d7dfe4}
+html[data-theme="light"] .home-hero h2,html[data-theme="light"] .home-action-card,html[data-theme="light"] .home-queue-row{color:#172027}
+html[data-theme="light"] .home-guide-btn{background:#fff;border-color:#d4dce1;color:#263139}
+html[data-theme="light"] .home-action-card,html[data-theme="light"] .home-queue,html[data-theme="light"] .home-queue-row{background:#fff;border-color:#d9e0e4}
+html[data-theme="light"] .home-action-card:hover,html[data-theme="light"] .home-queue-row:hover{background:#f7f9fa}
+html[data-theme="light"] .month-calendar,html[data-theme="light"] .calendar-toolbar,html[data-theme="light"] .calendar-weekdays,html[data-theme="light"] .calendar-grid,html[data-theme="light"] .calendar-day,html[data-theme="light"] .dashboard-stats>div,html[data-theme="light"] .request-card,html[data-theme="light"] .magasin-filters{background:#fff!important;color:#172027!important;border-color:#d9e0e4!important}
+html[data-theme="light"] .calendar-day.other-month{background:#f6f8f9!important;color:#a2adb4!important}
+html[data-theme="light"] .calendar-day:hover{background:#f3f6f8!important}
+html[data-theme="light"] .calendar-event{background:#f1f5f7!important;border-color:#d2dce2!important;color:#263139!important}
+html[data-theme="light"] .calendar-toolbar h2,html[data-theme="light"] .dashboard-stats>div strong{color:#202b32!important}
+html[data-theme="light"] .equipment-filterbar,html[data-theme="light"] .active-filter-chips,html[data-theme="light"] .equipment-context-bar,html[data-theme="light"] .park-table,html[data-theme="light"] .v19-equipment-row{background:#fff!important;border-color:#d9e0e4!important;color:#202b32!important}
+html[data-theme="light"] .v19-equipment-row:hover{background:#f5f8f9!important}
+html[data-theme="light"] .v19-equipment-row>span strong,html[data-theme="light"] .equipment-context-bar strong{color:#202b32!important}
+html[data-theme="light"] .equipment-search,html[data-theme="light"] .equipment-search input,html[data-theme="light"] .equipment-filterbar select,html[data-theme="light"] .equipment-filterbar>input{background:#f5f7f8!important;border-color:#d5dde2!important;color:#29353d!important;color-scheme:light}
+html[data-theme="light"] .soft-btn{background:#fff;color:#4b5962;border-color:#d3dce1}
+html[data-theme="light"] .active-filter-chips span{background:#edf1f3;color:#58666f}
