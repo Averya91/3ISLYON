@@ -566,3 +566,30 @@ html[data-theme="light"] #equipmentSubnav button.active{background:#e8edf0!impor
 #equipmentSubnav button>span{display:block!important;flex:1 1 auto!important;width:auto!important;min-width:0!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;line-height:1!important}
 #equipmentSubnav button.active:before{left:0!important;top:6px!important;bottom:6px!important}
 @media(max-width:900px){.magasin-page #adminPanel{grid-template-columns:1fr!important}.magasin-sidebar{width:260px!important}}
+
+
+/* V19.6 — portail d'accès magasin */
+.magasin-login.portal-login{position:relative;isolation:isolate;overflow:hidden;width:min(600px,calc(100vw - 40px));min-height:520px;padding:52px 54px;background:linear-gradient(145deg,#10171b 0%,#0a0f12 58%,#11181c 100%);border:1px solid #29343a;box-shadow:0 35px 120px #000b}
+.portal-login-content{position:relative;z-index:3;animation:portalContentIn .75s cubic-bezier(.2,.8,.2,1) both}
+.portal-stage{position:absolute;z-index:0;inset:0;pointer-events:none;overflow:hidden;background:radial-gradient(circle at 50% 45%,rgba(239,64,71,.08),transparent 34%)}
+.portal-halo{position:absolute;left:50%;top:48%;border:1px solid rgba(239,64,71,.22);border-radius:50%;transform:translate(-50%,-50%);animation:portalPulse 5s ease-in-out infinite}
+.portal-halo-a{width:430px;height:430px}.portal-halo-b{width:320px;height:320px;animation-delay:-2.5s}
+.portal-gate{position:absolute;inset:0;opacity:.4}.portal-gate span{position:absolute;top:-10%;bottom:-10%;width:1px;background:linear-gradient(transparent,rgba(239,64,71,.38),transparent);animation:portalDrift 8s ease-in-out infinite}.portal-gate span:nth-child(1){left:22%}.portal-gate span:nth-child(2){left:50%;animation-delay:-2.6s}.portal-gate span:nth-child(3){left:78%;animation-delay:-5.2s}
+.portal-scan{position:absolute;left:0;right:0;height:1px;top:10%;background:linear-gradient(90deg,transparent,rgba(239,64,71,.9),transparent);box-shadow:0 0 20px rgba(239,64,71,.55);opacity:.5;animation:portalScan 4.2s linear infinite}
+.portal-status{display:inline-flex;align-items:center;gap:9px;margin-bottom:28px;padding:8px 11px;border:1px solid #2c383e;background:#0a1013cc;color:#8f9ca3;font:700 9px 'Josefin Sans';letter-spacing:.12em}
+.portal-status-dot{width:7px;height:7px;border-radius:50%;background:#ef4047;box-shadow:0 0 0 4px rgba(239,64,71,.1);animation:portalDot 1.8s ease-in-out infinite}
+.portal-login input{position:relative;z-index:1;margin-bottom:9px;transition:border-color .2s,box-shadow .2s,background .2s}.portal-login input:focus{outline:0;border-color:#ef4047!important;box-shadow:0 0 0 3px rgba(239,64,71,.1),0 0 24px rgba(239,64,71,.08)}
+.portal-login .primary-wide{position:relative;overflow:hidden;transition:transform .18s,filter .18s}.portal-login .primary-wide:hover{transform:translateY(-1px);filter:brightness(1.08)}.portal-login .primary-wide:disabled{cursor:wait;opacity:.75}
+.portal-auth-overlay{position:absolute;z-index:8;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:11px;background:rgba(5,9,11,.9);backdrop-filter:blur(8px);opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s;color:#fff}.portal-auth-overlay b{font:700 18px 'Josefin Sans';letter-spacing:.12em}.portal-auth-overlay span{font-size:12px;color:#9ba7ad}
+.portal-auth-ring{width:92px;height:92px;border-radius:50%;border:1px solid rgba(239,64,71,.22);border-top:3px solid #ef4047;border-right-color:#ef4047;box-shadow:0 0 45px rgba(239,64,71,.12);animation:portalSpin .8s linear infinite}
+.portal-authenticating .portal-auth-overlay,.portal-granted .portal-auth-overlay{opacity:1;visibility:visible}
+.portal-authenticating .portal-stage{animation:portalCharge .55s ease-in-out infinite alternate}
+.portal-granted .portal-auth-overlay{background:rgba(5,12,10,.91);animation:portalOpen .72s cubic-bezier(.4,0,.2,1) forwards}.portal-granted .portal-auth-ring{border-color:#5ed891;border-top-color:#fff;box-shadow:0 0 60px rgba(94,216,145,.3);animation:portalGrant .65s ease-out forwards}
+.portal-denied{animation:portalReject .34s linear}.portal-denied .portal-status-dot{background:#ff5960;box-shadow:0 0 0 5px rgba(255,89,96,.13)}
+@keyframes portalContentIn{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes portalPulse{0%,100%{opacity:.18;transform:translate(-50%,-50%) scale(.94)}50%{opacity:.55;transform:translate(-50%,-50%) scale(1.04)}}
+@keyframes portalDrift{0%,100%{transform:translateX(-16px);opacity:.2}50%{transform:translateX(16px);opacity:.7}}
+@keyframes portalScan{0%{top:8%;opacity:0}10%{opacity:.6}90%{opacity:.6}100%{top:92%;opacity:0}}
+@keyframes portalDot{50%{opacity:.35;transform:scale(.72)}}@keyframes portalSpin{to{transform:rotate(360deg)}}@keyframes portalCharge{to{filter:brightness(1.25)}}@keyframes portalGrant{to{transform:scale(1.9);opacity:0}}@keyframes portalOpen{70%{opacity:1}100%{opacity:0;transform:scale(1.08)}}@keyframes portalReject{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+@media(prefers-reduced-motion:reduce){.portal-login *, .portal-login *:before,.portal-login *:after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+@media(max-width:650px){.magasin-login.portal-login{padding:38px 24px;min-height:500px}.portal-halo-a{width:340px;height:340px}.portal-halo-b{width:250px;height:250px}}
