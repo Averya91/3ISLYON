@@ -112,6 +112,12 @@ CREATE TABLE IF NOT EXISTS local_equipment (
   location TEXT NOT NULL DEFAULT '',
   enabled INTEGER NOT NULL DEFAULT 1,
   source TEXT NOT NULL DEFAULT 'rentman',
+  equipment_type TEXT NOT NULL DEFAULT 'physical_item',
+  properties_json TEXT NOT NULL DEFAULT '{}',
+  contents_json TEXT NOT NULL DEFAULT '[]',
+  accessories_json TEXT NOT NULL DEFAULT '[]',
+  suppliers_json TEXT NOT NULL DEFAULT '[]',
+  storage_location_id INTEGER,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -127,3 +133,18 @@ CREATE TABLE IF NOT EXISTS equipment_recommendation_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_equipment_rules_equipment ON equipment_recommendation_rules(equipment_id);
 CREATE INDEX IF NOT EXISTS idx_units_equipment_status ON equipment_units(equipment_id,status);
+
+
+CREATE TABLE IF NOT EXISTS storage_locations (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL UNIQUE,description TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS equipment_suppliers (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,contact_name TEXT NOT NULL DEFAULT '',email TEXT NOT NULL DEFAULT '',phone TEXT NOT NULL DEFAULT '',website TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS equipment_supplier_links (
+ equipment_id INTEGER NOT NULL,supplier_id INTEGER NOT NULL,reference TEXT NOT NULL DEFAULT '',purchase_price REAL,PRIMARY KEY(equipment_id,supplier_id)
+);
+CREATE TABLE IF NOT EXISTS equipment_contents (
+ parent_equipment_id INTEGER NOT NULL,child_equipment_id INTEGER NOT NULL,quantity INTEGER NOT NULL DEFAULT 1,kind TEXT NOT NULL DEFAULT 'content',PRIMARY KEY(parent_equipment_id,child_equipment_id,kind)
+);
+CREATE INDEX IF NOT EXISTS idx_local_equipment_location ON local_equipment(storage_location_id);
